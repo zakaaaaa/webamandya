@@ -12,6 +12,7 @@ app.use(express.json());
 app.use('/api/photobooth/license', require('./routes/license'));
 app.use('/api/photobooth/session', require('./routes/session'));
 app.use('/api/photobooth/upload',  require('./routes/upload'));
+app.use('/api/photobooth/photos',  require('./routes/photos'));
 app.use('/api/payment',            require('./routes/payment'));
 app.use('/api/frames',             require('./routes/frames'));
 app.use('/download', require('./routes/download'));

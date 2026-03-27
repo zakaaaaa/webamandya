@@ -3,13 +3,24 @@ const router = express.Router();
 const { supabase } = require('../middleware/validateDevice');
 
 // POST /api/photobooth/license/check
-// Dipanggil oleh: LicenseService.checkLicense() di Flutter
 router.post('/check', async (req, res) => {
   const { hwid } = req.body;
 
   if (!hwid) {
     return res.status(400).json({ success: false, message: 'HWID wajib diisi.' });
   }
+
+  // ─── BARU: Catat HWID yang belum terdaftar ke tabel unregistered_devices ───
+  // Ini berjalan di background, tidak memblokir response
+  supabase
+    .from('unregistered_devices')
+    .upsert(
+      { hwid, last_seen_at: new Date().toISOString() },
+      { onConflict: 'hwid' }
+    )
+    .then(() => {}) // fire & forget
+    .catch(() => {});
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const { data: device, error } = await supabase
     .from('devices')

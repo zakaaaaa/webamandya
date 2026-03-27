@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
     // 1. Cari device berdasarkan HWID
     const { data: device, error: deviceError } = await supabase
       .from('devices')
-      .select('id, client_id, is_active, license_end, clients(is_active)')
+      .select('id, client_id, is_active, license_end, clients(is_active, session_duration_minutes)')
       .eq('hwid', hwid)
       .single();
 
@@ -38,7 +38,7 @@ router.get('/', async (req, res) => {
     // 2. Fetch frames milik client ini
     const { data: frames, error: framesError } = await supabase
       .from('frames')
-      .select('id, name, image_url, thumbnail_url, photo_count, output_width, output_height, sort_order')
+      .select('id, name, image_url, thumbnail_url, photo_count, output_width, output_height, sort_order, photo_slots')
       .eq('client_id', device.client_id)
       .eq('is_active', true)
       .eq('type', 'static')
@@ -52,6 +52,7 @@ router.get('/', async (req, res) => {
       success: true,
       client_id: device.client_id,
       frames: frames ?? [],
+      session_duration_minutes: device.clients?.session_duration_minutes ?? 30,
     });
 
   } catch (e) {

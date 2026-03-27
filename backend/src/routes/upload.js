@@ -24,7 +24,7 @@ router.post('/', upload.single('photo'), async (req, res) => {
 
   const { error: uploadError } = await supabase.storage
     .from('photos')
-    .upload(fileName, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+    .upload(fileName, req.file.buffer, { contentType: req.file.mimetype || 'image/png', upsert: true });
 
   if (uploadError) return res.status(500).json({ success: false, message: 'Gagal upload foto.' });
 
@@ -51,11 +51,11 @@ router.post('/final', upload.single('photo'), async (req, res) => {
 
   if (!session) return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
 
-  const fileName = `${session.client_id}/${session.id}/final.jpg`;
+  const fileName = `${session.client_id}/${session.id}/final.png`;
 
   const { error: uploadError } = await supabase.storage
     .from('results')
-    .upload(fileName, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+    .upload(fileName, req.file.buffer, { contentType: req.file.mimetype || 'image/png', upsert: true });
 
   if (uploadError) return res.status(500).json({ success: false, message: 'Gagal upload final.' });
 
