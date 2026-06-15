@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Loader2, Mail, Lock, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { Loader2, Mail, Lock, ArrowRight, CheckCircle2, Camera } from 'lucide-react'
 
 const TYPING_TEXTS = [
   'Kelola bisnis photobooth kamu.',
@@ -13,12 +13,10 @@ const TYPING_TEXTS = [
 ]
 
 const FEATURES = [
-  { label: 'License & HWID Management',    color: '#818cf8' },
-  { label: 'Real-time Transaction Monitor', color: '#34d399' },
-  { label: 'Frame & Voucher Control',       color: '#f472b6' },
+  { label: 'License & HWID Management',     color: '#D42B22' },
+  { label: 'Real-time Transaction Monitor', color: '#059669' },
+  { label: 'Frame & Voucher Control',       color: '#D97706' },
 ]
-
-const LOGO_URL = 'https://dmfzqdalantgqgqftalv.supabase.co/storage/v1/object/public/element-web/1.png'
 
 export default function LoginPage() {
   const [email, setEmail]         = useState('')
@@ -62,19 +60,35 @@ export default function LoginPage() {
     router.push('/dashboard'); router.refresh()
   }
 
+  const Brand = ({ size = 44 }: { size?: number }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{
+        width: `${size}px`, height: `${size}px`, borderRadius: `${size * 0.28}px`, flexShrink: 0,
+        background: 'linear-gradient(135deg,#E83530,#D42B22,#C02018)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 6px 18px rgba(212,43,34,0.32)',
+      }}>
+        <Camera size={size * 0.5} color="white" />
+      </div>
+      <div style={{ lineHeight: 1.05 }}>
+        <div style={{ fontSize: `${size * 0.42}px`, fontWeight: 900, color: '#150C09', letterSpacing: '-0.02em' }}>Pabrik</div>
+        <div style={{ fontSize: `${size * 0.42}px`, fontWeight: 900, color: '#D42B22', letterSpacing: '-0.02em', marginTop: '-3px' }}>Kenangan</div>
+      </div>
+    </div>
+  )
+
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { font-family: 'Poppins', sans-serif; }
         @keyframes blink     { 0%,100%{opacity:1} 50%{opacity:0} }
         @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
         @keyframes spin      { to{transform:rotate(360deg)} }
         @keyframes shake     { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
         @keyframes float-1   { 0%,100%{transform:translate(0,0)} 50%{transform:translate(30px,-25px)} }
         @keyframes float-2   { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-20px,30px)} }
-        @keyframes float-3   { 0%,100%{transform:translate(0,0)} 50%{transform:translate(15px,20px)} }
         @keyframes slide-left  { from{opacity:0;transform:translateX(-32px)} to{opacity:1;transform:translateX(0)} }
         @keyframes slide-right { from{opacity:0;transform:translateX(32px)}  to{opacity:1;transform:translateX(0)} }
         @keyframes fade-up   { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
@@ -82,40 +96,40 @@ export default function LoginPage() {
         .slide-right { animation: slide-right 0.7s cubic-bezier(0.16,1,0.3,1) forwards; }
         .login-input {
           width: 100%;
-          background: rgba(255,255,255,0.05);
-          border: 1.5px solid rgba(255,255,255,0.1);
+          background: #FFFFFF;
+          border: 1.5px solid rgba(212,43,34,0.15);
           border-radius: 12px;
           padding: 13px 16px 13px 44px;
-          color: white;
+          color: #150C09;
           font-size: 14px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: 'Poppins', sans-serif;
           outline: none;
-          transition: border-color 0.2s, background 0.2s;
+          transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .login-input::placeholder { color: rgba(255,255,255,0.2); }
+        .login-input::placeholder { color: #B0A09A; }
         .login-input:focus {
-          border-color: rgba(99,102,241,0.7);
-          background: rgba(99,102,241,0.06);
+          border-color: #D42B22;
+          box-shadow: 0 0 0 3px rgba(212,43,34,0.10);
         }
         .login-btn {
           width: 100%;
           padding: 14px 20px;
-          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          background: linear-gradient(135deg, #E83530, #D42B22);
           border: none;
           border-radius: 12px;
           color: white;
           font-size: 14px;
-          font-weight: 600;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-weight: 700;
+          font-family: 'Poppins', sans-serif;
           cursor: pointer;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 8px;
           transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
-          box-shadow: 0 4px 20px rgba(99,102,241,0.35);
+          box-shadow: 0 4px 16px rgba(212,43,34,0.32);
         }
-        .login-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(99,102,241,0.5); }
+        .login-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 26px rgba(212,43,34,0.42); }
         .login-btn:active:not(:disabled) { transform: translateY(0); }
         .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         @media (max-width: 767px) {
@@ -132,16 +146,14 @@ export default function LoginPage() {
 
       <div style={{
         minHeight: '100vh', display: 'flex', position: 'relative', overflow: 'hidden',
-        background: 'linear-gradient(135deg, #080614 0%, #150f2e 45%, #0d1525 100%)',
-        fontFamily: "'Plus Jakarta Sans', sans-serif",
+        background: '#FAF7F5',
+        fontFamily: "'Poppins', sans-serif",
       }}>
 
-        {/* Orbs */}
+        {/* Soft red orbs */}
         {[
-          { w:700, h:700, style:{ top:'-180px', left:'-180px' },       color:'rgba(99,102,241,0.2)',  anim:'float-1 16s ease-in-out infinite' },
-          { w:550, h:550, style:{ bottom:'-120px', right:'-120px' },   color:'rgba(139,92,246,0.18)', anim:'float-2 20s ease-in-out infinite' },
-          { w:380, h:380, style:{ top:'45%', left:'40%' },             color:'rgba(236,72,153,0.1)',  anim:'float-3 24s ease-in-out infinite 3s' },
-          { w:280, h:280, style:{ top:'8%', right:'18%' },             color:'rgba(14,165,233,0.09)', anim:'float-1 18s ease-in-out infinite 5s' },
+          { w:700, h:700, style:{ top:'-180px', left:'-180px' },     color:'rgba(232,53,48,0.08)',  anim:'float-1 16s ease-in-out infinite' },
+          { w:550, h:550, style:{ bottom:'-120px', right:'-120px' }, color:'rgba(212,43,34,0.06)',  anim:'float-2 20s ease-in-out infinite' },
         ].map((o, i) => (
           <div key={i} style={{
             position: 'absolute', width:`${o.w}px`, height:`${o.h}px`,
@@ -154,7 +166,7 @@ export default function LoginPage() {
         {/* Grid */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none',
-          backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)',
+          backgroundImage: 'linear-gradient(rgba(212,43,34,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(212,43,34,0.03) 1px, transparent 1px)',
           backgroundSize: '56px 56px',
         }} />
 
@@ -164,40 +176,33 @@ export default function LoginPage() {
           padding: '60px 56px', position: 'relative', zIndex: 10,
           opacity: mounted ? 1 : 0,
         }}>
-          {/* Logo image - left panel */}
-          <div style={{
-            marginBottom: '40px',
-            animation: mounted ? 'fade-up 0.5s ease 0.05s both' : 'none',
-          }}>
-            <img
-              src={LOGO_URL}
-              alt="Logo"
-              style={{ height: '52px', width: 'auto', objectFit: 'contain', display: 'block' }}
-            />
+          {/* Brand */}
+          <div style={{ marginBottom: '40px', animation: mounted ? 'fade-up 0.5s ease 0.05s both' : 'none' }}>
+            <Brand size={48} />
           </div>
 
           {/* Badge */}
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '8px',
-            background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)',
+            background: 'rgba(212,43,34,0.08)', border: '1px solid rgba(212,43,34,0.20)',
             borderRadius: '100px', padding: '7px 16px',
             marginBottom: '28px', width: 'fit-content',
             animation: mounted ? 'fade-up 0.5s ease 0.1s both' : 'none',
           }}>
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#818cf8', animation: 'pulse-dot 2s infinite' }} />
-            <span style={{ color: '#a5b4fc', fontSize: '12px', fontWeight: 600, letterSpacing: '0.3px', fontFamily: 'Poppins, sans-serif' }}>
+            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#D42B22', animation: 'pulse-dot 2s infinite' }} />
+            <span style={{ color: '#D42B22', fontSize: '12px', fontWeight: 700, letterSpacing: '0.3px', fontFamily: 'Poppins, sans-serif' }}>
               Photobooth Management
             </span>
           </div>
 
           {/* Headline */}
           <h1 className="headline" style={{
-            color: 'white', fontSize: '48px', fontWeight: 800, lineHeight: 1.15,
-            fontFamily: 'Poppins, sans-serif', marginBottom: '20px',
+            color: '#150C09', fontSize: '48px', fontWeight: 900, lineHeight: 1.15,
+            fontFamily: 'Poppins, sans-serif', marginBottom: '20px', letterSpacing: '-0.02em',
             animation: mounted ? 'fade-up 0.5s ease 0.15s both' : 'none',
           }}>
             Kelola bisnis<br />
-            <span style={{ background: 'linear-gradient(135deg, #a5b4fc 0%, #e879f9 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            <span style={{ background: 'linear-gradient(135deg, #E83530 0%, #C02018 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               photobooth
             </span>
             <br />dengan mudah.
@@ -205,8 +210,8 @@ export default function LoginPage() {
 
           {/* Typewriter */}
           <div style={{ height: '24px', marginBottom: '44px', animation: mounted ? 'fade-up 0.5s ease 0.2s both' : 'none' }}>
-            <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '15px', fontWeight: 400 }}>{displayed}</span>
-            <span style={{ color: '#818cf8', animation: 'blink 1s step-end infinite', fontSize: '15px' }}>|</span>
+            <span style={{ color: '#7A6259', fontSize: '15px', fontWeight: 400 }}>{displayed}</span>
+            <span style={{ color: '#D42B22', animation: 'blink 1s step-end infinite', fontSize: '15px' }}>|</span>
           </div>
 
           {/* Features */}
@@ -217,18 +222,18 @@ export default function LoginPage() {
                 animation: mounted ? `fade-up 0.5s ease ${0.28 + i * 0.07}s both` : 'none',
               }}>
                 <CheckCircle2 size={15} color={f.color} style={{ flexShrink: 0 }} />
-                <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px' }}>{f.label}</span>
+                <span style={{ color: '#7A6259', fontSize: '14px' }}>{f.label}</span>
               </div>
             ))}
           </div>
 
           {/* Bottom brand */}
           <div style={{ marginTop: '64px', animation: mounted ? 'fade-up 0.5s ease 0.5s both' : 'none' }}>
-            <div style={{ color: 'rgba(255,255,255,0.15)', fontSize: '12px', letterSpacing: '3px', textTransform: 'uppercase', fontFamily: 'Poppins, sans-serif' }}>
+            <div style={{ color: '#B0A09A', fontSize: '12px', letterSpacing: '3px', textTransform: 'uppercase', fontFamily: 'Poppins, sans-serif' }}>
               Powered by
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '20px', fontWeight: 700, fontFamily: 'Poppins, sans-serif', marginTop: '4px' }}>
-              Amandya.tech
+            <div style={{ color: '#4A2E22', fontSize: '20px', fontWeight: 800, fontFamily: 'Poppins, sans-serif', marginTop: '4px' }}>
+              Pabrik Kenangan
             </div>
           </div>
         </div>
@@ -241,38 +246,30 @@ export default function LoginPage() {
         }}>
           <div className="login-card" style={{
             width: '100%', maxWidth: '420px',
-            background: 'rgba(255,255,255,0.055)',
-            backdropFilter: 'blur(48px) saturate(200%)',
-            WebkitBackdropFilter: 'blur(48px) saturate(200%)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: '#FFFFFF',
+            border: '1px solid rgba(212,43,34,0.10)',
             borderRadius: '28px', padding: '44px 40px',
-            boxShadow: '0 0 80px rgba(99,102,241,0.1), 0 32px 64px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
+            boxShadow: '0 20px 60px rgba(212,43,34,0.10), 0 4px 16px rgba(0,0,0,0.04)',
             position: 'relative', overflow: 'hidden',
           }}>
-            {/* Glow + shine */}
-            <div style={{ position: 'absolute', top: 0, right: 0, width: '160px', height: '160px', background: 'radial-gradient(circle at top right, rgba(99,102,241,0.1), transparent 70%)', borderRadius: '0 28px 0 0', pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', top: 0, left: '32px', right: '32px', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent)', pointerEvents: 'none' }} />
+            {/* Top shine */}
+            <div style={{ position: 'absolute', top: 0, left: '32px', right: '32px', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(212,43,34,0.20), transparent)', pointerEvents: 'none' }} />
 
-            {/* ── LOGO image in card ── */}
+            {/* Brand in card */}
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               marginBottom: '32px',
               animation: mounted ? 'fade-up 0.5s ease 0.25s both' : 'none',
             }}>
-              <img
-                src={LOGO_URL}
-                alt="Logo"
-                style={{ height: '56px', width: 'auto', objectFit: 'contain', display: 'block', marginBottom: '10px' }}
-              />
-
+              <Brand size={44} />
             </div>
 
             {/* Title */}
             <div style={{ marginBottom: '28px', animation: mounted ? 'fade-up 0.5s ease 0.3s both' : 'none' }}>
-              <h2 style={{ color: 'white', fontSize: '26px', fontWeight: 700, fontFamily: 'Poppins, sans-serif', marginBottom: '6px' }}>
+              <h2 style={{ color: '#150C09', fontSize: '26px', fontWeight: 800, fontFamily: 'Poppins, sans-serif', marginBottom: '6px' }}>
                 Masuk
               </h2>
-              <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '13.5px' }}>
+              <p style={{ color: '#9E8880', fontSize: '13.5px' }}>
                 Masukkan kredensial akun kamu
               </p>
             </div>
@@ -281,25 +278,25 @@ export default function LoginPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Email */}
               <div style={{ animation: mounted ? 'fade-up 0.5s ease 0.35s both' : 'none' }}>
-                <label style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: '8px', fontFamily: 'Poppins, sans-serif' }}>Email</label>
+                <label style={{ color: '#7A6259', fontSize: '11px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: '8px', fontFamily: 'Poppins, sans-serif' }}>Email</label>
                 <div style={{ position: 'relative' }}>
-                  <Mail size={14} color="rgba(255,255,255,0.22)" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                  <Mail size={14} color="#C0AFA9" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                   <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@photobooth.com" className="login-input" />
                 </div>
               </div>
 
               {/* Password */}
               <div style={{ animation: mounted ? 'fade-up 0.5s ease 0.4s both' : 'none' }}>
-                <label style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: '8px', fontFamily: 'Poppins, sans-serif' }}>Password</label>
+                <label style={{ color: '#7A6259', fontSize: '11px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', display: 'block', marginBottom: '8px', fontFamily: 'Poppins, sans-serif' }}>Password</label>
                 <div style={{ position: 'relative' }}>
-                  <Lock size={14} color="rgba(255,255,255,0.22)" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                  <Lock size={14} color="#C0AFA9" style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
                   <input type="password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} placeholder="••••••••" className="login-input" />
                 </div>
               </div>
 
               {/* Error */}
               {error && (
-                <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '10px', padding: '11px 14px', color: '#fca5a5', fontSize: '13px', fontWeight: 500, animation: 'shake 0.35s ease' }}>
+                <div style={{ background: 'rgba(180,30,20,0.08)', border: '1px solid rgba(180,30,20,0.22)', borderRadius: '10px', padding: '11px 14px', color: '#B82018', fontSize: '13px', fontWeight: 500, animation: 'shake 0.35s ease' }}>
                   {error}
                 </div>
               )}
@@ -316,9 +313,9 @@ export default function LoginPage() {
             </div>
 
             {/* Footer */}
-            <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(255,255,255,0.06)', textAlign: 'center', animation: mounted ? 'fade-up 0.5s ease 0.5s both' : 'none' }}>
-              <span style={{ color: 'rgba(255,255,255,0.18)', fontSize: '11px', letterSpacing: '2px', fontFamily: 'Poppins, sans-serif' }}>
-                PHOTOBOOTH © 2026
+            <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid rgba(212,43,34,0.08)', textAlign: 'center', animation: mounted ? 'fade-up 0.5s ease 0.5s both' : 'none' }}>
+              <span style={{ color: '#C0AFA9', fontSize: '11px', letterSpacing: '2px', fontFamily: 'Poppins, sans-serif' }}>
+                PABRIK KENANGAN © 2026
               </span>
             </div>
           </div>

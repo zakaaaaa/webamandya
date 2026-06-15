@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Check, Monitor } from 'lucide-react'
+import { Copy, Check } from 'lucide-react'
 
 export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
   hwid: string
@@ -21,15 +21,15 @@ export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })
 
-  // Define styling based on status
   const isRegistered = status !== 'Belum Terdaftar'
   const isActive = status === 'Aktif'
-  
-  const bg = isActive ? 'rgba(16,185,129,0.05)' : (!isRegistered ? 'rgba(245,158,11,0.05)' : 'rgba(239,68,68,0.05)')
-  const border = isActive ? 'rgba(16,185,129,0.1)' : (!isRegistered ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)')
-  const dotColor = isActive ? '#10b981' : (!isRegistered ? '#f59e0b' : '#ef4444')
-  const badgeBg = isActive ? 'rgba(16,185,129,0.15)' : (!isRegistered ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)')
-  const badgeColor = isActive ? '#34d399' : (!isRegistered ? '#fbbf24' : '#f87171')
+
+  // green = Aktif, amber = Belum Terdaftar, red = Tidak Aktif
+  const bg        = isActive ? 'rgba(5,150,105,0.05)'  : (!isRegistered ? 'rgba(217,119,6,0.05)'  : 'rgba(180,30,20,0.05)')
+  const border    = isActive ? 'rgba(5,150,105,0.16)'  : (!isRegistered ? 'rgba(217,119,6,0.16)'  : 'rgba(180,30,20,0.16)')
+  const dotColor  = isActive ? '#059669'               : (!isRegistered ? '#D97706'               : '#B82018')
+  const badgeBg   = isActive ? 'rgba(5,150,105,0.12)'  : (!isRegistered ? 'rgba(217,119,6,0.12)'  : 'rgba(180,30,20,0.12)')
+  const badgeColor= isActive ? '#059669'               : (!isRegistered ? '#D97706'               : '#B82018')
 
   return (
     <div style={{
@@ -37,32 +37,27 @@ export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
       padding: '10px 14px',
       background: bg,
       border: `1px solid ${border}`,
-      borderRadius: 8,
+      borderRadius: 12,
     }}>
       {/* Dot indicator */}
-      <div style={{
-        width: 7, height: 7, borderRadius: '50%',
-        background: dotColor, flexShrink: 0,
-      }} />
+      <div style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
 
       {/* HWID & Name info */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ 
-            color: 'white', fontSize: 13, fontWeight: 600, fontFamily: "'Plus Jakarta Sans',sans-serif"
-          }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ color: '#150C09', fontSize: 13, fontWeight: 700, fontFamily: "'Poppins',sans-serif" }}>
             {deviceName}
           </span>
           <span style={{
             background: badgeBg, color: badgeColor,
-            fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, letterSpacing: 0.5
+            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 100, letterSpacing: 0.3,
           }}>
             {status}
           </span>
         </div>
         <span style={{
           fontFamily: 'monospace', fontSize: 11,
-          color: 'rgba(255,255,255,0.4)', letterSpacing: 0.5,
+          color: '#9E8880', letterSpacing: 0.5,
           wordBreak: 'break-all',
         }}>
           {hwid}
@@ -71,10 +66,10 @@ export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
 
       {/* Timestamps */}
       <div style={{ flexShrink: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 10, color: '#C0AFA9', whiteSpace: 'nowrap' }}>
           Pertama: {formatDate(firstSeen)}
         </span>
-        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 10, color: '#9E8880', whiteSpace: 'nowrap' }}>
           Terakhir: {lastSeen ? formatDate(lastSeen) : '—'}
         </span>
       </div>
@@ -85,12 +80,12 @@ export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
         style={{
           flexShrink: 0,
           display: 'flex', alignItems: 'center', gap: 5,
-          padding: '6px 10px',
-          background: copied ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)',
-          border: `1px solid ${copied ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.1)'}`,
-          borderRadius: 6, cursor: 'pointer',
-          color: copied ? '#34d399' : 'rgba(255,255,255,0.5)',
-          fontSize: 11, fontWeight: 600,
+          padding: '7px 10px',
+          background: copied ? 'rgba(5,150,105,0.12)' : 'rgba(212,43,34,0.06)',
+          border: `1px solid ${copied ? 'rgba(5,150,105,0.3)' : 'rgba(212,43,34,0.14)'}`,
+          borderRadius: 9, cursor: 'pointer',
+          color: copied ? '#059669' : '#D42B22',
+          fontSize: 11, fontWeight: 700,
           transition: 'all 0.2s',
         }}
         title="Copy HWID"

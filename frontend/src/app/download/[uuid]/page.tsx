@@ -17,7 +17,7 @@ export default async function Page({ params }: { params: Promise<{ uuid: string 
 
   if (!session) {
     return (
-      <div style={{ color:'white', padding:40, background:'#080614', minHeight:'100vh' }}>
+      <div style={{ color:'#150C09', padding:40, background:'#FAF7F5', minHeight:'100vh' }}>
         <h2>Session tidak ditemukan</h2>
         <p>UUID: {uuid}</p>
         <p>Error: {error?.message ?? 'null'}</p>

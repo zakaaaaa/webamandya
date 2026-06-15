@@ -9,6 +9,16 @@ const superAdminNav = [
   { href: '/transactions', label: 'Transaksi', icon: Receipt  },
 ]
 
+// ── Gradient solid per stat (pabrikenangan palette) ──
+const statColors = [
+  { bg: 'linear-gradient(160deg,#E83530 0%,#D42B22 55%,#C02018 100%)', glow: 'rgba(180,30,20,0.28)' },
+  { bg: 'linear-gradient(160deg,#1050A0 0%,#1D6FB5 55%,#1558A0 100%)', glow: 'rgba(20,80,165,0.25)' },
+  { bg: 'linear-gradient(160deg,#0A7A5A 0%,#059669 55%,#047857 100%)', glow: 'rgba(5,120,85,0.25)'  },
+  { bg: 'linear-gradient(160deg,#1050A0 0%,#1D6FB5 55%,#1558A0 100%)', glow: 'rgba(20,80,165,0.25)' },
+  { bg: 'linear-gradient(160deg,#B45309 0%,#D97706 55%,#B45309 100%)', glow: 'rgba(180,85,0,0.25)'  },
+  { bg: 'linear-gradient(160deg,#5B21B6 0%,#7C3AED 55%,#6D28D9 100%)', glow: 'rgba(100,40,210,0.25)'},
+]
+
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -43,12 +53,12 @@ export default async function DashboardPage() {
     const todayRevenue = revenueData?.reduce((s, r) => s + (Number(r.amount) || 0), 0) ?? 0
 
     stats = [
-      { label: 'Total Client',     value: String(totalClients ?? 0),                     icon: Users,      gradient: 'from-violet-500 to-purple-600',  glow: 'rgba(139,92,246,0.25)' },
-      { label: 'Total Lisensi',    value: String(totalDevices ?? 0),                     icon: Monitor,    gradient: 'from-indigo-500 to-blue-600',    glow: 'rgba(99,102,241,0.25)' },
-      { label: 'Lisensi Aktif',    value: String(activeDevices ?? 0),                    icon: Shield,     gradient: 'from-emerald-500 to-teal-600',   glow: 'rgba(16,185,129,0.25)' },
-      { label: 'Sesi Hari Ini',    value: String(todaySessions ?? 0),                    icon: Activity,   gradient: 'from-sky-500 to-cyan-600',       glow: 'rgba(14,165,233,0.25)' },
-      { label: 'Revenue Hari Ini', value: `Rp ${todayRevenue.toLocaleString('id-ID')}`,  icon: TrendingUp, gradient: 'from-amber-500 to-orange-600',   glow: 'rgba(245,158,11,0.25)' },
-      { label: 'Total Admin',      value: String(totalAdmins ?? 0),                      icon: Receipt,    gradient: 'from-pink-500 to-rose-600',      glow: 'rgba(236,72,153,0.25)' },
+      { label: 'Total Client',     value: String(totalClients ?? 0),                     icon: Users      },
+      { label: 'Total Lisensi',    value: String(totalDevices ?? 0),                     icon: Monitor    },
+      { label: 'Lisensi Aktif',    value: String(activeDevices ?? 0),                    icon: Shield     },
+      { label: 'Sesi Hari Ini',    value: String(todaySessions ?? 0),                    icon: Activity   },
+      { label: 'Revenue Hari Ini', value: `Rp ${todayRevenue.toLocaleString('id-ID')}`,  icon: TrendingUp },
+      { label: 'Total Admin',      value: String(totalAdmins ?? 0),                      icon: Receipt    },
     ]
   } else {
     // ── ADMIN STATS ──
@@ -66,10 +76,10 @@ export default async function DashboardPage() {
     ])
     const todayRevenue = revenueData?.reduce((s, r) => s + (Number(r.amount) || 0), 0) ?? 0
     stats = [
-      { label: 'Sesi Hari Ini',       value: String(todaySessions ?? 0),                   icon: Activity,   gradient: 'from-indigo-500 to-violet-600',  glow: 'rgba(99,102,241,0.25)'  },
-      { label: 'Pendapatan Hari Ini',  value: `Rp ${todayRevenue.toLocaleString('id-ID')}`, icon: TrendingUp, gradient: 'from-emerald-500 to-teal-600',   glow: 'rgba(16,185,129,0.25)'  },
-      { label: 'Voucher Aktif',        value: String(activeVouchers ?? 0),                  icon: Receipt,    gradient: 'from-amber-500 to-orange-600',   glow: 'rgba(245,158,11,0.25)'  },
-      { label: 'Perangkat Aktif',      value: String(activeDevices ?? 0),                   icon: Monitor,    gradient: 'from-sky-500 to-blue-600',       glow: 'rgba(14,165,233,0.25)'  },
+      { label: 'Sesi Hari Ini',       value: String(todaySessions ?? 0),                   icon: Activity   },
+      { label: 'Pendapatan Hari Ini', value: `Rp ${todayRevenue.toLocaleString('id-ID')}`, icon: TrendingUp },
+      { label: 'Voucher Aktif',       value: String(activeVouchers ?? 0),                  icon: Receipt    },
+      { label: 'Perangkat Aktif',     value: String(activeDevices ?? 0),                   icon: Monitor    },
     ]
   }
 
@@ -90,7 +100,7 @@ export default async function DashboardPage() {
         regMap.set(d.hwid, {
           hwid: d.hwid,
           firstSeen: d.created_at,
-          lastSeen: d.created_at, // Basic lastseen approximation for registered devices without activity yet
+          lastSeen: d.created_at,
           deviceName: d.device_name || 'Tanpa Nama',
           status: d.is_active ? 'Aktif' : 'Tidak Aktif'
         })
@@ -108,14 +118,12 @@ export default async function DashboardPage() {
             status: 'Belum Terdaftar'
           })
         } else {
-          // If already registered, update lastSeen with the latest ping activity
           const existing = regMap.get(d.hwid)
           existing.lastSeen = d.last_seen_at
         }
       })
     }
-    
-    // Sort all devices by lastSeen timestamp descending
+
     allDevicesList = Array.from(regMap.values()).sort((a,b) => new Date(b.lastSeen).getTime() - new Date(a.lastSeen).getTime())
   }
 
@@ -131,28 +139,20 @@ export default async function DashboardPage() {
     sessions = data ?? []
   }
 
-  const statusStyle: Record<string, string> = {
-    paid:    'background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.2)',
-    pending: 'background:rgba(245,158,11,0.12);color:#fbbf24;border:1px solid rgba(245,158,11,0.2)',
-    free:    'background:rgba(99,102,241,0.12);color:#a5b4fc;border:1px solid rgba(99,102,241,0.2)',
-    expired: 'background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.2)',
-    failed:  'background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.2)',
-  }
-
-  const colorMap: Record<string, string> = {
-    'violet-500': '#8b5cf6', 'purple-600':  '#9333ea',
-    'indigo-500': '#6366f1', 'blue-600':    '#2563eb',
-    'emerald-500':'#10b981', 'teal-600':    '#0d9488',
-    'sky-500':    '#0ea5e9', 'cyan-600':    '#0891b2',
-    'amber-500':  '#f59e0b', 'orange-600':  '#ea580c',
-    'pink-500':   '#ec4899', 'rose-600':    '#e11d48',
+  const statusCfg: Record<string, { bg: string; color: string; border: string }> = {
+    paid:    { bg: 'rgba(5,150,105,0.10)', color: '#059669', border: 'rgba(5,150,105,0.22)' },
+    pending: { bg: 'rgba(217,119,6,0.10)', color: '#D97706', border: 'rgba(217,119,6,0.22)' },
+    free:    { bg: 'rgba(212,43,34,0.08)', color: '#D42B22', border: 'rgba(212,43,34,0.18)' },
+    expired: { bg: 'rgba(122,98,89,0.10)', color: '#7A6259', border: 'rgba(122,98,89,0.20)' },
+    failed:  { bg: 'rgba(180,30,20,0.10)', color: '#B82018', border: 'rgba(180,30,20,0.20)' },
   }
 
   return (
     <>
       <style>{`
         @keyframes fade-up { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-        .stat-card { animation: fade-up 0.5s ease both; }
+        .stat-card { animation: fade-up 0.5s ease both; transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1); }
+        .stat-card:hover { transform: translateY(-5px); }
         .stat-card:nth-child(1){animation-delay:0.05s}
         .stat-card:nth-child(2){animation-delay:0.10s}
         .stat-card:nth-child(3){animation-delay:0.15s}
@@ -162,11 +162,7 @@ export default async function DashboardPage() {
         .table-section { animation: fade-up 0.5s ease 0.35s both; }
         .page-header   { animation: fade-up 0.5s ease 0.0s  both; }
 
-        .stats-grid {
-          display: grid;
-          gap: 16px;
-          margin-bottom: 28px;
-        }
+        .stats-grid { display: grid; gap: 16px; margin-bottom: 28px; }
         .stats-grid.super { grid-template-columns: repeat(3, 1fr); }
         .stats-grid.admin { grid-template-columns: repeat(4, 1fr); }
 
@@ -183,85 +179,72 @@ export default async function DashboardPage() {
         @media (max-width: 480px) {
           .stats-grid.super { grid-template-columns: 1fr; }
           .stats-grid.admin { grid-template-columns: 1fr; }
-        }
-
-        @media (max-width: 480px) {
           .stat-value { font-size: 22px !important; }
         }
 
         .quick-link {
           display: flex; align-items: center; gap: 10px;
-          padding: 10px 14px; border-radius: 10px;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.06);
-          color: rgba(255,255,255,0.5); font-size: 13px;
+          padding: 11px 14px; border-radius: 12px;
+          background: linear-gradient(160deg, rgba(212,43,34,0.05), rgba(212,43,34,0.02));
+          border: 1px solid rgba(212,43,34,0.12);
+          color: #7A6259; font-size: 13px; font-weight: 600;
           text-decoration: none; transition: all 0.2s;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: 'Poppins', sans-serif;
         }
         .quick-link:hover {
-          background: rgba(99,102,241,0.12);
-          border-color: rgba(99,102,241,0.25);
-          color: white;
+          background: linear-gradient(160deg, rgba(212,43,34,0.10), rgba(212,43,34,0.05));
+          border-color: rgba(212,43,34,0.22);
+          color: #D42B22; transform: translateX(3px);
         }
 
-        .super-admin-info {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 16px;
-          margin-top: 28px;
-        }
-        @media (max-width: 768px) {
-          .super-admin-info { grid-template-columns: 1fr; }
-        }
-
-        .hwid-full-width {
-          grid-column: 1 / -1;
-        }
+        .super-admin-info { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 28px; }
+        @media (max-width: 768px) { .super-admin-info { grid-template-columns: 1fr; } }
+        .hwid-full-width { grid-column: 1 / -1; }
       `}</style>
 
-      <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", minHeight: '100vh' }}>
+      <div style={{ fontFamily: "'Poppins',sans-serif", minHeight: '100vh' }}>
 
         {/* ── HEADER ── */}
         <div className="page-header" style={{ marginBottom: '32px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-            <div style={{ width: '3px', height: '20px', borderRadius: '2px', background: 'linear-gradient(to bottom,#6366f1,#8b5cf6)' }} />
-            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: '11px', fontWeight: 600, letterSpacing: '2.5px', textTransform: 'uppercase', fontFamily: 'Poppins,sans-serif' }}>
+            <div style={{ width: '3px', height: '20px', borderRadius: '2px', background: 'linear-gradient(to bottom,#E83530,#D42B22)' }} />
+            <p style={{ color: '#D42B22', fontSize: '11px', fontWeight: 700, letterSpacing: '2.5px', textTransform: 'uppercase', fontFamily: 'Poppins,sans-serif' }}>
               {isSuperAdmin ? 'Super Admin' : 'Admin'} Dashboard
             </p>
           </div>
-          <h1 style={{ color: 'white', fontSize: '28px', fontWeight: 700, fontFamily: 'Poppins,sans-serif', marginBottom: '6px' }}>
+          <h1 style={{ color: '#150C09', fontSize: '30px', fontWeight: 900, fontFamily: 'Poppins,sans-serif', marginBottom: '6px', letterSpacing: '-0.02em' }}>
             Overview
           </h1>
-          <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '14px' }}>
-            Selamat datang, <span style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>{adminUser?.full_name}</span>
+          <p style={{ color: '#9E8880', fontSize: '14px' }}>
+            Selamat datang, <span style={{ color: '#4A2E22', fontWeight: 700 }}>{adminUser?.full_name}</span>
           </p>
         </div>
 
         {/* ── STATS GRID ── */}
         <div className={`stats-grid ${isSuperAdmin ? 'super' : 'admin'}`}>
-          {stats.map(({ label, value, icon: Icon, gradient, glow }) => {
-            const [from, to] = gradient.replace('from-', '').replace(' to-', ',').split(',')
-            const c1 = colorMap[from.trim()] || '#6366f1'
-            const c2 = colorMap[to.trim()]   || '#8b5cf6'
+          {stats.map(({ label, value, icon: Icon }, i) => {
+            const c = statColors[i % statColors.length]
             return (
-              <div key={label} className="stat-card glass-card" style={{
-                padding: '22px',
-                boxShadow: `0 0 30px ${glow}, 0 8px 32px rgba(0,0,0,0.3)`,
+              <div key={label} className="stat-card stat-card-shine" style={{
+                padding: '22px', borderRadius: '22px', position: 'relative', overflow: 'hidden',
+                background: c.bg,
+                boxShadow: `inset 0 2px 3px rgba(255,255,255,0.18), 0 8px 24px ${c.glow}, 0 16px 40px rgba(0,0,0,0.04)`,
               }}>
+                <div style={{ position: 'absolute', top: 0, left: 22, right: 22, height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent)' }} />
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '11px', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', fontFamily: 'Poppins,sans-serif' }}>
+                  <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', fontFamily: 'Poppins,sans-serif' }}>
                     {label}
                   </p>
                   <div style={{
-                    width: '36px', height: '36px', borderRadius: '10px', flexShrink: 0,
-                    background: `linear-gradient(135deg,${c1},${c2})`,
+                    width: '36px', height: '36px', borderRadius: '11px', flexShrink: 0,
+                    background: 'rgba(255,255,255,0.18)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: `0 4px 12px ${glow}`,
+                    boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.25)',
                   }}>
                     <Icon size={16} color="white" />
                   </div>
                 </div>
-                <p className="stat-value" style={{ color: 'white', fontSize: '26px', fontWeight: 700, fontFamily: 'Poppins,sans-serif', lineHeight: 1 }}>
+                <p className="stat-value" style={{ color: 'white', fontSize: '28px', fontWeight: 900, fontFamily: 'Poppins,sans-serif', lineHeight: 1, letterSpacing: '-0.03em' }}>
                   {value}
                 </p>
               </div>
@@ -275,16 +258,18 @@ export default async function DashboardPage() {
 
             {/* Quick access card */}
             <div className="glass-card" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                <div style={{ width: 3, height: 16, borderRadius: 2, background: 'linear-gradient(to bottom,#6366f1,#8b5cf6)' }} />
-                <h3 style={{ color: 'white', fontSize: 14, fontWeight: 600, fontFamily: 'Poppins,sans-serif' }}>Quick Access</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+                <div style={{ width: 3, height: 18, borderRadius: 2, background: 'linear-gradient(to bottom,#E83530,#D42B22)' }} />
+                <h3 style={{ color: '#150C09', fontSize: 15, fontWeight: 800, fontFamily: 'Poppins,sans-serif' }}>Quick Access</h3>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {superAdminNav.map(item => (
                   <a key={item.href} href={item.href} className="quick-link">
-                    <item.icon size={15} />
+                    <div style={{ width: 30, height: 30, borderRadius: 9, flexShrink: 0, background: 'rgba(212,43,34,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D42B22' }}>
+                      <item.icon size={14} />
+                    </div>
                     {item.label}
-                    <span style={{ marginLeft: 'auto', opacity: 0.3, fontSize: 16 }}>→</span>
+                    <span style={{ marginLeft: 'auto', color: '#C0AFA9', fontSize: 16 }}>→</span>
                   </a>
                 ))}
               </div>
@@ -292,25 +277,25 @@ export default async function DashboardPage() {
 
             {/* System status */}
             <div className="glass-card" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                <div style={{ width: 3, height: 16, borderRadius: 2, background: 'linear-gradient(to bottom,#10b981,#0d9488)' }} />
-                <h3 style={{ color: 'white', fontSize: 14, fontWeight: 600, fontFamily: 'Poppins,sans-serif' }}>Status Sistem</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+                <div style={{ width: 3, height: 18, borderRadius: 2, background: 'linear-gradient(to bottom,#059669,#047857)' }} />
+                <h3 style={{ color: '#150C09', fontSize: 15, fontWeight: 800, fontFamily: 'Poppins,sans-serif' }}>Status Sistem</h3>
               </div>
               {[
                 { label: 'API Backend',  ok: true },
                 { label: 'Database',     ok: true },
                 { label: 'Storage',      ok: true },
                 { label: 'Auth Service', ok: true },
-              ].map(s => (
+              ].map((s, idx) => (
                 <div key={s.label} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 0',
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                  padding: '11px 0',
+                  borderBottom: idx < 3 ? '1px solid rgba(212,43,34,0.07)' : 'none',
                 }}>
-                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{s.label}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.ok ? '#10b981' : '#ef4444', boxShadow: `0 0 6px ${s.ok ? '#10b981' : '#ef4444'}` }} />
-                    <span style={{ color: s.ok ? '#34d399' : '#f87171', fontSize: 11, fontWeight: 600, letterSpacing: 1 }}>
+                  <span style={{ color: '#7A6259', fontSize: 13, fontFamily: "'Poppins',sans-serif" }}>{s.label}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.ok ? '#059669' : '#D42B22', boxShadow: `0 0 0 2px ${s.ok ? 'rgba(5,150,105,0.15)' : 'rgba(212,43,34,0.15)'}` }} />
+                    <span style={{ color: s.ok ? '#059669' : '#D42B22', fontSize: 10, fontWeight: 800, letterSpacing: 1 }}>
                       {s.ok ? 'ONLINE' : 'OFFLINE'}
                     </span>
                   </div>
@@ -320,28 +305,25 @@ export default async function DashboardPage() {
 
             {/* ── HWID DEBUG PANEL ── */}
             <div className="glass-card hwid-full-width" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ width: 3, height: 16, borderRadius: 2, background: 'linear-gradient(to bottom,#10b981,#3b82f6)' }} />
-                  <h3 style={{ color: 'white', fontSize: 14, fontWeight: 600, fontFamily: 'Poppins,sans-serif' }}>
-                    Daftar Perangkat — HWID Terdaftar & Belum Terdaftar
+                  <div style={{ width: 3, height: 18, borderRadius: 2, background: 'linear-gradient(to bottom,#7C3AED,#6D28D9)' }} />
+                  <h3 style={{ color: '#150C09', fontSize: 15, fontWeight: 800, fontFamily: 'Poppins,sans-serif' }}>
+                    HWID Debug — Terdaftar & Belum Terdaftar
                   </h3>
                 </div>
                 <span style={{
-                  background: 'rgba(59,130,246,0.12)',
-                  border: '1px solid rgba(59,130,246,0.2)',
-                  borderRadius: 6, padding: '3px 10px',
-                  color: '#60a5fa', fontSize: 11, fontWeight: 600, letterSpacing: 1,
+                  background: 'rgba(124,58,237,0.09)',
+                  border: '1px solid rgba(124,58,237,0.18)',
+                  borderRadius: 100, padding: '3px 12px',
+                  color: '#7C3AED', fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
                 }}>
                   {allDevicesList.length} HWID
                 </span>
               </div>
 
               {allDevicesList.length === 0 ? (
-                <div style={{
-                  textAlign: 'center', padding: '32px 0',
-                  color: 'rgba(255,255,255,0.2)', fontSize: 13,
-                }}>
+                <div style={{ textAlign: 'center', padding: '32px 0', color: '#C0AFA9', fontSize: 13 }}>
                   Belum ada perangkat yang mencoba koneksi
                 </div>
               ) : (
@@ -368,22 +350,24 @@ export default async function DashboardPage() {
           <div className="glass-card table-section" style={{ overflow: 'hidden' }}>
             <div style={{
               padding: '20px 24px',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
+              borderBottom: '1px solid rgba(212,43,34,0.08)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <div>
-                <h2 style={{ color: 'white', fontSize: '16px', fontWeight: 600, fontFamily: 'Poppins,sans-serif', marginBottom: '2px' }}>
+                <h2 style={{ color: '#150C09', fontSize: '16px', fontWeight: 800, fontFamily: 'Poppins,sans-serif', marginBottom: '2px' }}>
                   Transaksi Terbaru
                 </h2>
-                <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: '12px' }}>
+                <p style={{ color: '#9E8880', fontSize: '12px' }}>
                   {sessions.length} transaksi terakhir
                 </p>
               </div>
               <div style={{
-                background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.2)',
-                borderRadius: '8px', padding: '6px 12px',
-                color: '#a5b4fc', fontSize: '12px', fontWeight: 500,
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'rgba(5,150,105,0.08)', border: '1px solid rgba(5,150,105,0.18)',
+                borderRadius: '100px', padding: '5px 14px',
+                color: '#059669', fontSize: '12px', fontWeight: 700,
               }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#059669' }} />
                 Live
               </div>
             </div>
@@ -391,64 +375,62 @@ export default async function DashboardPage() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <tr style={{ borderBottom: '1px solid rgba(212,43,34,0.07)' }}>
                     {['Kode Transaksi', 'Perangkat', 'Metode', 'Status', 'Jumlah', 'Waktu'].map(h => (
                       <th key={h} style={{
                         padding: '12px 20px', textAlign: 'left',
-                        color: 'rgba(255,255,255,0.25)', fontSize: '11px',
-                        fontWeight: 600, letterSpacing: '1.5px', textTransform: 'uppercase',
+                        color: '#C0AFA9', fontSize: '10px',
+                        fontWeight: 800, letterSpacing: '1.5px', textTransform: 'uppercase',
                         fontFamily: 'Poppins,sans-serif', whiteSpace: 'nowrap',
+                        background: 'rgba(212,43,34,0.02)',
                       }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {sessions.map((s: any) => (
-                    <tr key={s.transaction_code} className="table-row"
-                      style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' }}>
-                      <td style={{ padding: '14px 20px', color: 'rgba(255,255,255,0.5)', fontSize: '13px', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                        {s.transaction_code.slice(0, 24)}…
-                      </td>
-                      <td style={{ padding: '14px 20px', color: 'rgba(255,255,255,0.45)', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                        {s.devices?.device_name ?? '—'}
-                      </td>
-                      <td style={{ padding: '14px 20px' }}>
-                        <span style={{
-                          background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)',
-                          border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px',
-                          padding: '3px 10px', fontSize: '12px', fontWeight: 500, textTransform: 'capitalize',
-                        }}>
-                          {s.payment_method}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 20px' }}>
-                        <span style={{
-                          borderRadius: '6px', padding: '3px 10px',
-                          fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap',
-                          ...(Object.fromEntries(
-                            (statusStyle[s.payment_status] || statusStyle.failed)
-                              .split(';').filter(Boolean)
-                              .map((s: string) => {
-                                const [k, ...v] = s.trim().split(':')
-                                const key = k.trim().replace(/-([a-z])/g, (_: string, c: string) => c.toUpperCase())
-                                return [key, v.join(':').trim()]
-                              })
-                          )),
-                        }}>
-                          {s.payment_status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px 20px', color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                        Rp {Number(s.amount).toLocaleString('id-ID')}
-                      </td>
-                      <td style={{ padding: '14px 20px', color: 'rgba(255,255,255,0.25)', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                        {new Date(s.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
-                      </td>
-                    </tr>
-                  ))}
+                  {sessions.map((s: any) => {
+                    const cfg = statusCfg[s.payment_status] || statusCfg.failed
+                    return (
+                      <tr key={s.transaction_code} className="table-row"
+                        style={{ borderBottom: '1px solid rgba(212,43,34,0.05)', transition: 'background 0.15s' }}>
+                        <td style={{ padding: '14px 20px', whiteSpace: 'nowrap' }}>
+                          <span style={{ color: '#7A6259', fontSize: '12px', fontWeight: 600, fontFamily: 'monospace', background: 'rgba(212,43,34,0.05)', border: '1px solid rgba(212,43,34,0.10)', borderRadius: 8, padding: '3px 10px' }}>
+                            {s.transaction_code.slice(0, 20)}…
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 20px', color: '#4A2E22', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {s.devices?.device_name ?? '—'}
+                        </td>
+                        <td style={{ padding: '14px 20px' }}>
+                          <span style={{
+                            background: 'rgba(212,43,34,0.07)', color: '#7A6259',
+                            border: '1px solid rgba(212,43,34,0.14)', borderRadius: '8px',
+                            padding: '4px 12px', fontSize: '12px', fontWeight: 700, textTransform: 'capitalize',
+                          }}>
+                            {s.payment_method}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 20px' }}>
+                          <span style={{
+                            background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}`,
+                            borderRadius: '100px', padding: '4px 12px',
+                            fontSize: '11px', fontWeight: 800, whiteSpace: 'nowrap', textTransform: 'capitalize',
+                          }}>
+                            {s.payment_status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 20px', color: '#150C09', fontSize: '14px', fontWeight: 800, whiteSpace: 'nowrap' }}>
+                          Rp {Number(s.amount).toLocaleString('id-ID')}
+                        </td>
+                        <td style={{ padding: '14px 20px', color: '#9E8880', fontSize: '12px', whiteSpace: 'nowrap' }}>
+                          {new Date(s.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
+                        </td>
+                      </tr>
+                    )
+                  })}
                   {!sessions.length && (
                     <tr>
-                      <td colSpan={6} style={{ padding: '48px 20px', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: '14px' }}>
+                      <td colSpan={6} style={{ padding: '48px 20px', textAlign: 'center', color: '#C0AFA9', fontSize: '14px' }}>
                         Belum ada transaksi
                       </td>
                     </tr>

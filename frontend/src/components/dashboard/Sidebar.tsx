@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, Receipt, Images, Frame, Ticket, Monitor, Users, LogOut, Settings } from 'lucide-react'
+import { LayoutDashboard, Receipt, Images, Frame, Ticket, Monitor, Users, LogOut, Settings, Camera } from 'lucide-react'
 
 const adminNav = [
   { href: '/dashboard',    label: 'Overview',  icon: LayoutDashboard },
@@ -36,60 +36,58 @@ export default function Sidebar({ role }: { role: string }) {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
 
         .sidebar-link {
           display: flex; align-items: center; gap: 10px;
-          padding: 10px 12px; border-radius: 12px;
+          padding: 11px 12px; border-radius: 12px;
           font-size: 13.5px; font-weight: 500; text-decoration: none;
-          transition: all 0.2s; color: rgba(255,255,255,0.4);
+          transition: all 0.2s; color: #7A6259;
           border: 1px solid transparent;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: 'Poppins', sans-serif;
           position: relative;
         }
-        .sidebar-link:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.05); }
+        .sidebar-link:hover { color: #D42B22; background: rgba(212,43,34,0.05); }
         .sidebar-link.active {
-          color: white;
-          background: linear-gradient(135deg,rgba(99,102,241,0.25),rgba(139,92,246,0.15));
-          border-color: rgba(99,102,241,0.3);
+          color: #D42B22; font-weight: 600;
+          background: linear-gradient(135deg,rgba(212,43,34,0.10),rgba(212,43,34,0.05));
+          border-color: rgba(212,43,34,0.20);
         }
         .logout-btn {
           display: flex; align-items: center; gap: 10px;
-          padding: 10px 12px; border-radius: 12px;
+          padding: 11px 12px; border-radius: 12px;
           font-size: 13.5px; font-weight: 500;
           background: none; border: none; cursor: pointer;
-          color: rgba(255,255,255,0.35); transition: all 0.2s;
-          width: 100%; font-family: 'Plus Jakarta Sans', sans-serif;
+          color: #9E8880; transition: all 0.2s;
+          width: 100%; font-family: 'Poppins', sans-serif;
         }
-        .logout-btn:hover { color: #fca5a5; background: rgba(239,68,68,0.08); }
+        .logout-btn:hover { color: #C02018; background: rgba(212,43,34,0.06); }
 
-        /* ── DESKTOP SIDEBAR: fixed, tidak ikut scroll ── */
+        /* ── DESKTOP SIDEBAR ── */
         .sidebar-desktop {
           position: fixed;
           top: 0; left: 0; bottom: 0;
           width: 240px;
           display: flex;
           flex-direction: column;
-          padding: 20px 16px;
-          background: rgba(8,6,20,0.97);
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
-          border-right: 1px solid rgba(255,255,255,0.06);
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          padding: 24px 16px;
+          background: #FFFFFF;
+          border-right: 1px solid rgba(212,43,34,0.08);
+          box-shadow: 1px 0 20px rgba(212,43,34,0.04);
+          font-family: 'Poppins', sans-serif;
           z-index: 100;
           overflow-y: auto;
         }
 
-        /* ── BOTTOM NAVBAR: mobile only ── */
+        /* ── BOTTOM NAVBAR: mobile ── */
         .bottom-nav {
           display: none;
           position: fixed;
           bottom: 0; left: 0; right: 0;
           height: 64px;
-          background: rgba(8,6,20,0.97);
-          backdrop-filter: blur(24px);
-          -webkit-backdrop-filter: blur(24px);
-          border-top: 1px solid rgba(255,255,255,0.08);
+          background: #FFFFFF;
+          border-top: 1px solid rgba(212,43,34,0.10);
+          box-shadow: 0 -2px 16px rgba(212,43,34,0.06);
           z-index: 100;
           align-items: center;
           justify-content: space-around;
@@ -98,21 +96,21 @@ export default function Sidebar({ role }: { role: string }) {
         .bottom-nav-item {
           display: flex; flex-direction: column; align-items: center; justify-content: center;
           gap: 3px; flex: 1; padding: 6px 2px;
-          text-decoration: none; color: rgba(255,255,255,0.35);
+          text-decoration: none; color: #9E8880;
           font-size: 10px; font-weight: 600;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-family: 'Poppins', sans-serif;
           border-radius: 10px; transition: all 0.15s;
           min-width: 0;
         }
-        .bottom-nav-item.active { color: #a5b4fc; }
-        .bottom-nav-item:hover { color: rgba(255,255,255,0.7); }
+        .bottom-nav-item.active { color: #D42B22; }
+        .bottom-nav-item:hover { color: #D42B22; }
         .bottom-nav-icon {
           width: 24px; height: 24px;
           display: flex; align-items: center; justify-content: center;
           border-radius: 8px; transition: all 0.15s;
         }
         .bottom-nav-item.active .bottom-nav-icon {
-          background: rgba(99,102,241,0.2);
+          background: rgba(212,43,34,0.12);
         }
         .bottom-nav-label {
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -121,12 +119,12 @@ export default function Sidebar({ role }: { role: string }) {
         .bottom-nav-logout {
           display: flex; flex-direction: column; align-items: center; justify-content: center;
           gap: 3px; flex: 1; padding: 6px 2px;
-          color: rgba(255,255,255,0.25); font-size: 10px; font-weight: 600;
-          font-family: 'Plus Jakarta Sans', sans-serif;
+          color: #B0A09A; font-size: 10px; font-weight: 600;
+          font-family: 'Poppins', sans-serif;
           background: none; border: none; cursor: pointer;
           border-radius: 10px; transition: all 0.15s;
         }
-        .bottom-nav-logout:hover { color: #fca5a5; }
+        .bottom-nav-logout:hover { color: #C02018; }
 
         @media (max-width: 768px) {
           .sidebar-desktop { display: none !important; }
@@ -136,28 +134,42 @@ export default function Sidebar({ role }: { role: string }) {
 
       {/* ── DESKTOP SIDEBAR ── */}
       <aside className="sidebar-desktop">
-        {/* Logo */}
-        <div style={{ padding: '8px 12px 20px', marginBottom: '4px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-            <img
-              src="https://dmfzqdalantgqgqftalv.supabase.co/storage/v1/object/public/element-web/1.png"
-              alt="Logo"
-              style={{ width: '100%', maxWidth: '170px', height: 'auto', objectFit: 'contain' }}
-            />
+        {/* Logo / Brand */}
+        <div style={{ padding: '4px 8px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
-              color: 'rgba(255,255,255,0.25)', fontSize: '9px', letterSpacing: '2.5px',
-              textTransform: 'uppercase', fontFamily: 'Poppins,sans-serif', textAlign: 'center',
-              background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.2)',
-              borderRadius: '20px', padding: '2px 10px',
+              width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
+              background: 'linear-gradient(135deg,#E83530,#D42B22,#C02018)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(212,43,34,0.30)',
             }}>
-              {role === 'super_admin' ? 'Super Admin' : 'Admin'}
+              <Camera size={20} color="white" />
             </div>
+            <div style={{ lineHeight: 1.05 }}>
+              <div style={{ fontSize: '15px', fontWeight: 900, color: '#150C09', letterSpacing: '-0.02em' }}>
+                Pabrik
+              </div>
+              <div style={{ fontSize: '15px', fontWeight: 900, color: '#D42B22', letterSpacing: '-0.02em', marginTop: '-2px' }}>
+                Kenangan
+              </div>
+            </div>
+          </div>
+          <div style={{
+            marginTop: '14px',
+            color: '#D42B22', fontSize: '9px', letterSpacing: '2px',
+            textTransform: 'uppercase', fontWeight: 700, fontFamily: 'Poppins,sans-serif',
+            textAlign: 'center',
+            background: 'rgba(212,43,34,0.07)', border: '1px solid rgba(212,43,34,0.16)',
+            borderRadius: '20px', padding: '4px 10px', width: 'fit-content',
+            margin: '14px auto 0',
+          }}>
+            {role === 'super_admin' ? 'Super Admin' : 'Admin'}
           </div>
         </div>
 
-        <div style={{ height: '1px', background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent)', margin: '0 4px 16px' }} />
+        <div style={{ height: '1px', background: 'linear-gradient(90deg,transparent,rgba(212,43,34,0.10),transparent)', margin: '0 4px 16px' }} />
 
-        <div style={{ color: 'rgba(255,255,255,0.2)', fontSize: '10px', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase', padding: '0 12px', marginBottom: '8px', fontFamily: 'Poppins,sans-serif' }}>
+        <div style={{ color: '#B0A09A', fontSize: '10px', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', padding: '0 12px', marginBottom: '8px', fontFamily: 'Poppins,sans-serif' }}>
           Menu
         </div>
 
@@ -167,16 +179,16 @@ export default function Sidebar({ role }: { role: string }) {
             return (
               <Link key={href} href={href} className={`sidebar-link ${isActive ? 'active' : ''}`}>
                 {isActive && (
-                  <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: '3px', height: '20px', borderRadius: '0 3px 3px 0', background: 'linear-gradient(to bottom,#6366f1,#8b5cf6)' }} />
+                  <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: '3px', height: '20px', borderRadius: '0 3px 3px 0', background: 'linear-gradient(to bottom,#E83530,#D42B22)' }} />
                 )}
-                <Icon size={16} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.6 }} />
+                <Icon size={16} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7 }} />
                 {label}
               </Link>
             )
           })}
         </nav>
 
-        <div style={{ height: '1px', background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent)', margin: '16px 4px' }} />
+        <div style={{ height: '1px', background: 'linear-gradient(90deg,transparent,rgba(212,43,34,0.10),transparent)', margin: '16px 4px' }} />
 
         <button onClick={handleLogout} className="logout-btn">
           <LogOut size={16} style={{ flexShrink: 0 }} />

@@ -26,16 +26,16 @@ type Props = {
 const PREVIEW_PHOTO = 'https://dmfzqdalantgqgqftalv.supabase.co/storage/v1/object/public/element-web/preview.webp'
 
 const COLORS = [
-  { b:'#6366f1', bg:'rgba(99,102,241,.85)',  t:'#fff' },
+  { b:'#D42B22', bg:'rgba(212,43,34,.85)',  t:'#fff' },
   { b:'#10b981', bg:'rgba(16,185,129,.85)',  t:'#fff' },
   { b:'#f59e0b', bg:'rgba(245,158,11,.85)',  t:'#fff' },
   { b:'#ef4444', bg:'rgba(239,68,68,.85)',   t:'#fff' },
-  { b:'#8b5cf6', bg:'rgba(139,92,246,.85)',  t:'#fff' },
+  { b:'#D42B22', bg:'rgba(212,43,34,.85)',  t:'#fff' },
   { b:'#06b6d4', bg:'rgba(6,182,212,.85)',   t:'#fff' },
-  { b:'#f472b6', bg:'rgba(244,114,182,.85)', t:'#fff' },
+  { b:'#E83530', bg:'rgba(212,43,34,.85)', t:'#fff' },
   { b:'#84cc16', bg:'rgba(132,204,22,.85)',  t:'#fff' },
   { b:'#fb923c', bg:'rgba(251,146,60,.85)',  t:'#fff' },
-  { b:'#38bdf8', bg:'rgba(56,189,248,.85)',  t:'#fff' },
+  { b:'#E83530', bg:'rgba(232,53,48,.85)',  t:'#fff' },
 ]
 
 function makeDefaults(photoCount: number, slotCount: number, w: number, h: number): PhotoSlot[] {
@@ -187,9 +187,9 @@ export default function FrameSlotEditor({
         @keyframes slot-blink{0%,100%{opacity:1}50%{opacity:.6}}
         .slot-sel{animation:slot-blink 1.8s ease infinite}
         .rh:hover{transform:scale(1.4)!important;background:#fff!important}
-        .slot-row:hover{background:rgba(255,255,255,.05)!important}
-        .tool-btn:hover{background:rgba(255,255,255,.1)!important;color:white!important}
-        .zoom-btn:hover{background:rgba(99,102,241,.2)!important;border-color:rgba(99,102,241,.4)!important;}
+        .slot-row:hover{background:rgba(212,43,34,0.05)!important}
+        .tool-btn:hover{background:rgba(212,43,34,0.08)!important;color:#D42B22!important}
+        .zoom-btn:hover{background:rgba(212,43,34,.2)!important;border-color:rgba(212,43,34,.4)!important;}
 
         /* Mobile responsive */
         .fse-body { display:flex; gap:16px; align-items:flex-start; }
@@ -206,14 +206,14 @@ export default function FrameSlotEditor({
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
         {/* Progress */}
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <div style={{ width:64, height:6, borderRadius:3, background:'rgba(255,255,255,.08)', overflow:'hidden' }}>
+          <div style={{ width:64, height:6, borderRadius:3, background:'rgba(212,43,34,0.07)', overflow:'hidden' }}>
             <div style={{ height:'100%', borderRadius:3, transition:'width .3s',
-              background: slots.length===tgtSlots ? '#10b981' : '#6366f1',
+              background: slots.length===tgtSlots ? '#10b981' : '#D42B22',
               width:`${Math.min(100,(slots.length/Math.max(1,tgtSlots))*100)}%`
             }}/>
           </div>
           <span style={{ fontSize:14, fontWeight:700, fontFamily:'Poppins,sans-serif',
-            color: slots.length===tgtSlots ? '#34d399' : 'rgba(255,255,255,.5)'
+            color: slots.length===tgtSlots ? '#059669' : 'rgba(74,46,34,0.9)'
           }}>
             {slots.length} / {tgtSlots} slot{slots.length===tgtSlots ? ' — Lengkap' : ''}
           </span>
@@ -224,10 +224,10 @@ export default function FrameSlotEditor({
           {/* Preview toggle */}
           <button onClick={()=>setPreview(v=>!v)} className="tool-btn" style={{
             display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8, cursor:'pointer',
-            fontSize:13, fontFamily:"'Plus Jakarta Sans',sans-serif", transition:'all .15s',
-            border:`1px solid ${preview?'rgba(99,102,241,.5)':'rgba(255,255,255,.1)'}`,
-            background:preview?'rgba(99,102,241,.15)':'rgba(255,255,255,.02)',
-            color:preview?'#a5b4fc':'rgba(255,255,255,.4)',
+            fontSize:13, fontFamily:"'Poppins',sans-serif", transition:'all .15s',
+            border:`1px solid ${preview?'rgba(212,43,34,.5)':'rgba(212,43,34,0.08)'}`,
+            background:preview?'rgba(212,43,34,.15)':'rgba(212,43,34,0.025)',
+            color:preview?'#E83530':'rgba(122,98,89,0.95)',
           }}>
             {preview ? <EyeOff size={13}/> : <Eye size={13}/>}
             {preview ? 'Edit Mode' : 'Preview'}
@@ -235,7 +235,7 @@ export default function FrameSlotEditor({
 
           <button onClick={()=>setGuides(v=>!v)} className="tool-btn" style={{
             padding:'7px 14px', borderRadius:8, cursor:'pointer', fontSize:13,
-            fontFamily:"'Plus Jakarta Sans',sans-serif", transition:'all .15s',
+            fontFamily:"'Poppins',sans-serif", transition:'all .15s',
             border:`1px solid rgba(255,255,255,${guides?.2:.08})`,
             background:`rgba(255,255,255,${guides?.07:.02})`,
             color:`rgba(255,255,255,${guides?.6:.3})`,
@@ -243,14 +243,14 @@ export default function FrameSlotEditor({
 
           <button onClick={()=>{setSlots(makeDefaults(photoCount,tgtSlots,outputWidth,outputHeight));setSelected(null)}}
             className="tool-btn"
-            style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8, cursor:'pointer', fontSize:13, fontFamily:"'Plus Jakarta Sans',sans-serif", transition:'all .15s', border:'1px solid rgba(255,255,255,.1)', background:'rgba(255,255,255,.03)', color:'rgba(255,255,255,.4)' }}>
+            style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8, cursor:'pointer', fontSize:13, fontFamily:"'Poppins',sans-serif", transition:'all .15s', border:'1px solid rgba(212,43,34,0.08)', background:'rgba(212,43,34,0.03)', color:'rgba(122,98,89,0.95)' }}>
             <RotateCcw size={13}/>Reset
           </button>
 
           <button onClick={addSlot} style={{
             display:'flex', alignItems:'center', gap:6, padding:'7px 16px', borderRadius:8,
-            cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'Plus Jakarta Sans',sans-serif",
-            border:'1px solid rgba(99,102,241,.4)', background:'rgba(99,102,241,.12)', color:'#a5b4fc',
+            cursor:'pointer', fontSize:13, fontWeight:600, fontFamily:"'Poppins',sans-serif",
+            border:'1px solid rgba(212,43,34,.4)', background:'rgba(212,43,34,.12)', color:'#E83530',
           }}>
             <Plus size={14}/>Tambah Slot
           </button>
@@ -269,7 +269,7 @@ export default function FrameSlotEditor({
             <div style={{
               width:'100%', height: viewportH,
               overflow: zoom > 1 ? 'auto' : 'hidden',
-              border:'1.5px solid rgba(99,102,241,.25)', borderRadius:12,
+              border:'1.5px solid rgba(212,43,34,.25)', borderRadius:12,
               background:'#0d0d18',
             }}>
             <div ref={canvasRef}
@@ -302,14 +302,14 @@ export default function FrameSlotEditor({
                 <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none', zIndex:6 }}>
                   {Array.from({length:9},(_,i)=>(
                     <g key={i}>
-                      <line x1={`${(i+1)*10}%`} y1="0" x2={`${(i+1)*10}%`} y2="100%" stroke="rgba(255,255,255,.04)" strokeWidth="0.5"/>
-                      <line x1="0" y1={`${(i+1)*10}%`} x2="100%" y2={`${(i+1)*10}%`} stroke="rgba(255,255,255,.04)" strokeWidth="0.5"/>
+                      <line x1={`${(i+1)*10}%`} y1="0" x2={`${(i+1)*10}%`} y2="100%" stroke="rgba(212,43,34,0.04)" strokeWidth="0.5"/>
+                      <line x1="0" y1={`${(i+1)*10}%`} x2="100%" y2={`${(i+1)*10}%`} stroke="rgba(212,43,34,0.04)" strokeWidth="0.5"/>
                     </g>
                   ))}
                   {[33.3,66.6].map(p=>(
                     <g key={p}>
-                      <line x1={`${p}%`} y1="0" x2={`${p}%`} y2="100%" stroke="rgba(255,255,255,.1)" strokeWidth="0.5" strokeDasharray="3,3"/>
-                      <line x1="0" y1={`${p}%`} x2="100%" y2={`${p}%`} stroke="rgba(255,255,255,.1)" strokeWidth="0.5" strokeDasharray="3,3"/>
+                      <line x1={`${p}%`} y1="0" x2={`${p}%`} y2="100%" stroke="rgba(212,43,34,0.08)" strokeWidth="0.5" strokeDasharray="3,3"/>
+                      <line x1="0" y1={`${p}%`} x2="100%" y2={`${p}%`} stroke="rgba(212,43,34,0.08)" strokeWidth="0.5" strokeDasharray="3,3"/>
                     </g>
                   ))}
                 </svg>
@@ -337,7 +337,7 @@ export default function FrameSlotEditor({
                           display:'flex', alignItems:'center', justifyContent:'center',
                           boxShadow:`0 2px 8px rgba(0,0,0,.7),0 0 0 3px ${c.b}40`,
                         }}>
-                        <RotateCw size={13} color="white"/>
+                        <RotateCw size={13} color="#fff"/>
                         <svg style={{ position:'absolute', left:'50%', top:'100%', transform:'translateX(-50%)', pointerEvents:'none', overflow:'visible' }}>
                           <line x1="0" y1="0" x2="0" y2={ROT_OFFSET-2} stroke={c.b} strokeWidth="1.5" strokeDasharray="3,2" opacity=".7"/>
                         </svg>
@@ -358,7 +358,7 @@ export default function FrameSlotEditor({
                           display:'flex', alignItems:'center', justifyContent:'center',
                           boxShadow:'0 2px 8px rgba(0,0,0,.7)',
                         }}>
-                        <Trash2 size={12} color="white"/>
+                        <Trash2 size={12} color="#fff"/>
                       </div>
                     )}
 
@@ -395,7 +395,7 @@ export default function FrameSlotEditor({
                         </span>
                         {sw > 50 && sh > 50 && (
                           <span style={{
-                            color:'rgba(255,255,255,.6)',
+                            color:'rgba(21,12,9,0.8)',
                             fontSize: Math.min(sw*.1, 14),
                             fontFamily:'Poppins,sans-serif', fontWeight:600,
                           }}>
@@ -408,11 +408,11 @@ export default function FrameSlotEditor({
                       {sw > 54 && sh > 32 && (
                         <div style={{ position:'absolute', bottom:4, right:5, display:'flex', gap:3, pointerEvents:'none', zIndex:2 }}>
                           {slot.rotation !== 0 && (
-                            <span style={{ color:'rgba(255,255,255,.8)', fontSize:10, fontFamily:'monospace', background:'rgba(0,0,0,.5)', padding:'2px 4px', borderRadius:3 }}>
+                            <span style={{ color:'rgba(21,12,9,0.9)', fontSize:10, fontFamily:'monospace', background:'rgba(0,0,0,.5)', padding:'2px 4px', borderRadius:3 }}>
                               {Math.round(slot.rotation)}°
                             </span>
                           )}
-                          <span style={{ color:'rgba(255,255,255,.7)', fontSize:10, fontFamily:'monospace', background:'rgba(0,0,0,.5)', padding:'2px 4px', borderRadius:3 }}>
+                          <span style={{ color:'rgba(21,12,9,0.85)', fontSize:10, fontFamily:'monospace', background:'rgba(0,0,0,.5)', padding:'2px 4px', borderRadius:3 }}>
                             {Math.round(slot.width)}x{Math.round(slot.height)}
                           </span>
                         </div>
@@ -444,7 +444,7 @@ export default function FrameSlotEditor({
 
               {/* Hint bar */}
               {!preview && (
-                <div style={{ position:'absolute', bottom:10, left:'50%', transform:'translateX(-50%)', background:'rgba(0,0,0,.65)', borderRadius:20, padding:'5px 14px', color:'rgba(255,255,255,.35)', fontSize:11, fontFamily:'Poppins,sans-serif', whiteSpace:'nowrap', zIndex:50, pointerEvents:'none' }}>
+                <div style={{ position:'absolute', bottom:10, left:'50%', transform:'translateX(-50%)', background:'rgba(0,0,0,.65)', borderRadius:20, padding:'5px 14px', color:'rgba(122,98,89,0.88)', fontSize:11, fontFamily:'Poppins,sans-serif', whiteSpace:'nowrap', zIndex:50, pointerEvents:'none' }}>
                   Drag — pindah &nbsp;|&nbsp; Sudut — resize &nbsp;|&nbsp; Atas — rotasi &nbsp;|&nbsp; Kanan — hapus
                 </div>
               )}
@@ -455,20 +455,20 @@ export default function FrameSlotEditor({
           {/* Zoom controls — below canvas */}
           <div style={{ display:'flex', alignItems:'center', gap:8, justifyContent:'center' }}>
             <button onClick={()=>setZoom(v=>Math.max(0.4, parseFloat((v-0.1).toFixed(1))))} className="zoom-btn"
-              style={{ display:'flex', alignItems:'center', justifyContent:'center', width:34, height:34, borderRadius:8, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.1)', color:'rgba(255,255,255,.5)', cursor:'pointer', transition:'all .15s' }}>
+              style={{ display:'flex', alignItems:'center', justifyContent:'center', width:34, height:34, borderRadius:8, background:'rgba(212,43,34,0.04)', border:'1px solid rgba(212,43,34,0.08)', color:'rgba(74,46,34,0.9)', cursor:'pointer', transition:'all .15s' }}>
               <ZoomOut size={14}/>
             </button>
-            <div style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.08)', borderRadius:8, padding:'6px 14px' }}>
-              <span style={{ color:'rgba(255,255,255,.5)', fontSize:13, fontFamily:'Poppins,sans-serif', fontWeight:600, minWidth:36, textAlign:'center' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(212,43,34,0.04)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:8, padding:'6px 14px' }}>
+              <span style={{ color:'rgba(74,46,34,0.9)', fontSize:13, fontFamily:'Poppins,sans-serif', fontWeight:600, minWidth:36, textAlign:'center' }}>
                 {Math.round(zoom*100)}%
               </span>
             </div>
             <button onClick={()=>setZoom(v=>Math.min(2.0, parseFloat((v+0.1).toFixed(1))))} className="zoom-btn"
-              style={{ display:'flex', alignItems:'center', justifyContent:'center', width:34, height:34, borderRadius:8, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.1)', color:'rgba(255,255,255,.5)', cursor:'pointer', transition:'all .15s' }}>
+              style={{ display:'flex', alignItems:'center', justifyContent:'center', width:34, height:34, borderRadius:8, background:'rgba(212,43,34,0.04)', border:'1px solid rgba(212,43,34,0.08)', color:'rgba(74,46,34,0.9)', cursor:'pointer', transition:'all .15s' }}>
               <ZoomIn size={14}/>
             </button>
             <button onClick={()=>setZoom(1.0)}
-              style={{ padding:'6px 12px', borderRadius:8, background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.08)', color:'rgba(255,255,255,.3)', fontSize:12, cursor:'pointer', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+              style={{ padding:'6px 12px', borderRadius:8, background:'rgba(212,43,34,0.03)', border:'1px solid rgba(212,43,34,0.07)', color:'rgba(122,98,89,0.8)', fontSize:12, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
               Reset
             </button>
           </div>
@@ -477,7 +477,7 @@ export default function FrameSlotEditor({
         {/* SIDE PANEL */}
         <div className="fse-side">
 
-          <p style={{ color:'rgba(255,255,255,.35)', fontSize:12, fontWeight:600, letterSpacing:'1.5px', textTransform:'uppercase', fontFamily:'Poppins,sans-serif' }}>
+          <p style={{ color:'rgba(122,98,89,0.88)', fontSize:12, fontWeight:600, letterSpacing:'1.5px', textTransform:'uppercase', fontFamily:'Poppins,sans-serif' }}>
             Daftar Slot ({slots.length})
           </p>
 
@@ -489,27 +489,27 @@ export default function FrameSlotEditor({
                 <div key={slot.id} className="slot-row" onClick={()=>setSelected(isSel?null:slot.id)}
                   style={{
                     padding:'9px 11px', borderRadius:9, cursor:'pointer', transition:'all .12s',
-                    border:`1px solid ${isSel?c.b:'rgba(255,255,255,.08)'}`,
-                    background: isSel ? c.bg.replace('.85','.2') : 'rgba(255,255,255,.02)',
+                    border:`1px solid ${isSel?c.b:'rgba(212,43,34,0.07)'}`,
+                    background: isSel ? c.bg.replace('.85','.2') : 'rgba(212,43,34,0.025)',
                     display:'flex', alignItems:'center', gap:9,
                   }}>
                   {/* Color dot */}
                   <div style={{ width:28, height:28, borderRadius:7, background:c.bg, border:`1.5px solid ${c.b}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                    <span style={{ color:'white', fontSize:13, fontWeight:800, fontFamily:'Poppins,sans-serif' }}>{idx+1}</span>
+                    <span style={{ color:'#150C09', fontSize:13, fontWeight:800, fontFamily:'Poppins,sans-serif' }}>{idx+1}</span>
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:3 }}>
-                      <span style={{ color:'rgba(255,255,255,.8)', fontSize:13, fontWeight:700, fontFamily:'Poppins,sans-serif' }}>Slot {idx+1}</span>
-                      <span style={{ color:'rgba(255,255,255,.4)', fontSize:12, fontFamily:'Poppins,sans-serif' }}>F{slot.photo_index+1}</span>
+                      <span style={{ color:'rgba(21,12,9,0.9)', fontSize:13, fontWeight:700, fontFamily:'Poppins,sans-serif' }}>Slot {idx+1}</span>
+                      <span style={{ color:'rgba(122,98,89,0.95)', fontSize:12, fontFamily:'Poppins,sans-serif' }}>F{slot.photo_index+1}</span>
                     </div>
-                    <div style={{ color:'rgba(255,255,255,.3)', fontSize:11, fontFamily:'monospace' }}>
+                    <div style={{ color:'rgba(122,98,89,0.8)', fontSize:11, fontFamily:'monospace' }}>
                       {Math.round(slot.width)}x{Math.round(slot.height)}{slot.rotation?` · ${Math.round(slot.rotation)}°`:''}
                     </div>
                   </div>
                   <button onClick={e=>{e.stopPropagation();removeSlot(slot.id)}}
-                    style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,.2)', padding:4, display:'flex', flexShrink:0, transition:'color .15s' }}
-                    onMouseOver={e=>(e.currentTarget.style.color='#f87171')}
-                    onMouseOut={e=>(e.currentTarget.style.color='rgba(255,255,255,.2)')}>
+                    style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(158,136,128,0.85)', padding:4, display:'flex', flexShrink:0, transition:'color .15s' }}
+                    onMouseOver={e=>(e.currentTarget.style.color='#B82018')}
+                    onMouseOut={e=>(e.currentTarget.style.color='rgba(158,136,128,0.85)')}>
                     <Trash2 size={13}/>
                   </button>
                 </div>
@@ -521,8 +521,8 @@ export default function FrameSlotEditor({
           {selected !== null && slots.find(s=>s.id===selected) && (() => {
             const sel = slots.find(s=>s.id===selected)!
             return (
-              <div style={{ padding:'12px 14px', borderRadius:10, border:'1px solid rgba(255,255,255,.1)', background:'rgba(255,255,255,.03)' }}>
-                <p style={{ color:'rgba(255,255,255,.4)', fontSize:12, fontWeight:600, marginBottom:10, fontFamily:'Poppins,sans-serif', textTransform:'uppercase', letterSpacing:'1px' }}>
+              <div style={{ padding:'12px 14px', borderRadius:10, border:'1px solid rgba(212,43,34,0.08)', background:'rgba(212,43,34,0.03)' }}>
+                <p style={{ color:'rgba(122,98,89,0.95)', fontSize:12, fontWeight:600, marginBottom:10, fontFamily:'Poppins,sans-serif', textTransform:'uppercase', letterSpacing:'1px' }}>
                   Foto untuk Slot {slots.findIndex(s=>s.id===selected)+1}
                 </p>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
@@ -534,9 +534,9 @@ export default function FrameSlotEditor({
                         onClick={()=>setSlots(prev=>prev.map(s=>s.id===selected?{...s,photo_index:i}:s))}
                         style={{
                           minWidth:38, padding:'7px 10px', borderRadius:7,
-                          border:`1.5px solid ${isActive?c.b:'rgba(255,255,255,.1)'}`,
-                          background: isActive ? c.bg.replace('.85','.2') : 'rgba(255,255,255,.03)',
-                          color: isActive ? 'white' : 'rgba(255,255,255,.4)',
+                          border:`1.5px solid ${isActive?c.b:'rgba(212,43,34,0.08)'}`,
+                          background: isActive ? c.bg.replace('.85','.2') : 'rgba(212,43,34,0.03)',
+                          color: isActive ? '#150C09' : 'rgba(122,98,89,0.95)',
                           fontSize:13, fontWeight:700, cursor:'pointer',
                           fontFamily:'Poppins,sans-serif', transition:'all .15s',
                         }}>
@@ -550,7 +550,7 @@ export default function FrameSlotEditor({
           })()}
 
           {/* Legend */}
-          <div className="fse-legend" style={{ padding:'12px 14px', borderRadius:10, background:'rgba(99,102,241,.05)', border:'1px solid rgba(99,102,241,.12)' }}>
+          <div className="fse-legend" style={{ padding:'12px 14px', borderRadius:10, background:'rgba(212,43,34,.05)', border:'1px solid rgba(212,43,34,.12)' }}>
             <p style={{ color:'rgba(165,180,252,.55)', fontSize:12, lineHeight:2, fontFamily:'Poppins,sans-serif' }}>
               Angka = urutan slot<br/>
               F1, F2 = foto ke berapa<br/>

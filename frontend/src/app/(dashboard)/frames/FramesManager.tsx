@@ -153,13 +153,13 @@ export default function FramesManager({
 
   const inputCls: React.CSSProperties = {
     width:'100%', boxSizing:'border-box' as const,
-    background:'rgba(255,255,255,.06)', border:'1.5px solid rgba(255,255,255,.1)',
-    borderRadius:10, padding:'10px 14px', color:'white', fontSize:14,
-    outline:'none', fontFamily:"'Plus Jakarta Sans',sans-serif", transition:'border-color .2s',
+    background:'rgba(212,43,34,0.055)', border:'1.5px solid rgba(212,43,34,0.08)',
+    borderRadius:10, padding:'10px 14px', color:'#150C09', fontSize:14,
+    outline:'none', fontFamily:"'Poppins',sans-serif", transition:'border-color .2s',
   }
 
   const labelCls: React.CSSProperties = {
-    color:'rgba(255,255,255,.4)', fontSize:12, fontWeight:600, letterSpacing:'1px',
+    color:'rgba(122,98,89,0.95)', fontSize:12, fontWeight:600, letterSpacing:'1px',
     textTransform:'uppercase' as const, display:'block', marginBottom:8, fontFamily:'Poppins,sans-serif',
   }
 
@@ -169,44 +169,44 @@ export default function FramesManager({
   if (view === 'edit-slots' && editingFrame) {
     const expectedSlotsEdit = editingFrame.photo_slots?.length || editingFrame.photo_count
     return (
-      <div style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", padding:'28px 32px', maxWidth:1200, margin:'0 auto' }}>
+      <div style={{ fontFamily:"'Poppins',sans-serif", padding:'28px 32px', maxWidth:1200, margin:'0 auto' }}>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:22, flexWrap:'wrap' }}>
           <button onClick={()=>{setView('list');setError('')}}
-            style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.1)', borderRadius:9, padding:'8px 14px', color:'rgba(255,255,255,.5)', cursor:'pointer', fontSize:13, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+            style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(212,43,34,0.055)', border:'1px solid rgba(212,43,34,0.08)', borderRadius:9, padding:'8px 14px', color:'rgba(74,46,34,0.9)', cursor:'pointer', fontSize:13, fontFamily:"'Poppins',sans-serif" }}>
             <ChevronLeft size={14}/>Kembali
           </button>
           <div style={{ flex:1, minWidth:0 }}>
-            <h2 style={{ color:'white', fontSize:20, fontWeight:700, fontFamily:'Poppins,sans-serif', marginBottom:3 }}>
+            <h2 style={{ color:'#150C09', fontSize:20, fontWeight:700, fontFamily:'Poppins,sans-serif', marginBottom:3 }}>
               Edit Slot — {editingFrame.name}
             </h2>
-            <p style={{ color:'rgba(255,255,255,.35)', fontSize:13 }}>
+            <p style={{ color:'rgba(122,98,89,0.88)', fontSize:13 }}>
               {editingFrame.photo_count} foto · {editingFrame.output_width}x{editingFrame.output_height}px
             </p>
           </div>
           <div style={{ display:'flex', gap:9, alignItems:'center', flexWrap:'wrap' }}>
             {error && (
-              <div style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:8, background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.15)', color:'#f87171', fontSize:13 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 12px', borderRadius:8, background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.15)', color:'#B82018', fontSize:13 }}>
                 <AlertCircle size={13}/>{error}
               </div>
             )}
             <button onClick={handleSaveSlots} disabled={saveSlotLoading}
-              style={{ display:'flex', alignItems:'center', gap:7, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', border:'none', borderRadius:10, padding:'10px 20px', color:'white', fontSize:14, fontWeight:600, cursor:saveSlotLoading?'not-allowed':'pointer', boxShadow:'0 4px 14px rgba(99,102,241,.3)', fontFamily:"'Plus Jakarta Sans',sans-serif", opacity:saveSlotLoading?.7:1 }}>
+              style={{ display:'flex', alignItems:'center', gap:7, background:'linear-gradient(135deg,#E83530,#C02018)', border:'none', borderRadius:10, padding:'10px 20px', color:'#fff', fontSize:14, fontWeight:600, cursor:saveSlotLoading?'not-allowed':'pointer', boxShadow:'0 4px 14px rgba(212,43,34,.3)', fontFamily:"'Poppins',sans-serif", opacity:saveSlotLoading?.7:1 }}>
               {saveSlotLoading?<><Loader2 size={14} style={{animation:'spin 1s linear infinite'}}/>Menyimpan...</>:<><Check size={14}/>Simpan Slot</>}
             </button>
           </div>
         </div>
 
         {pendingSlots.length !== expectedSlotsEdit && pendingSlots.length > 0 && (
-          <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:10, background:'rgba(245,158,11,.07)', border:'1px solid rgba(245,158,11,.18)', color:'#fbbf24', fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:10, background:'rgba(245,158,11,.07)', border:'1px solid rgba(245,158,11,.18)', color:'#D97706', fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
             <AlertCircle size={14}/>
             Frame ini sebelumnya memiliki <strong style={{margin:'0 3px'}}>{expectedSlotsEdit} slot</strong>.
             Sekarang ada <strong style={{margin:'0 3px'}}>{pendingSlots.length}</strong>.
           </div>
         )}
 
-        <div style={{ background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.07)', borderRadius:16, padding:22 }}>
+        <div style={{ background:'rgba(212,43,34,0.03)', border:'1px solid rgba(212,43,34,0.06)', borderRadius:16, padding:22 }}>
           <FrameSlotEditor
             frameUrl={editingFrame.image_url}
             outputWidth={editingFrame.output_width}
@@ -226,24 +226,24 @@ export default function FramesManager({
   // ══════════════════════
   if (view === 'create') {
     return (
-      <div style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", padding:'28px 32px', maxWidth:1200, margin:'0 auto' }}>
+      <div style={{ fontFamily:"'Poppins',sans-serif", padding:'28px 32px', maxWidth:1200, margin:'0 auto' }}>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fade-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
 
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:26 }}>
           <button onClick={()=>{setView('list');resetCreate()}}
-            style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.1)', borderRadius:9, padding:'8px 14px', color:'rgba(255,255,255,.5)', cursor:'pointer', fontSize:13, fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+            style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(212,43,34,0.055)', border:'1px solid rgba(212,43,34,0.08)', borderRadius:9, padding:'8px 14px', color:'rgba(74,46,34,0.9)', cursor:'pointer', fontSize:13, fontFamily:"'Poppins',sans-serif" }}>
             <ChevronLeft size={14}/>Kembali
           </button>
           <div>
-            <h2 style={{ color:'white', fontSize:22, fontWeight:700, fontFamily:'Poppins,sans-serif', marginBottom:3 }}>Upload Frame Baru</h2>
-            <p style={{ color:'rgba(255,255,255,.35)', fontSize:13 }}>Upload PNG transparan, lalu atur posisi slot foto</p>
+            <h2 style={{ color:'#150C09', fontSize:22, fontWeight:700, fontFamily:'Poppins,sans-serif', marginBottom:3 }}>Upload Frame Baru</h2>
+            <p style={{ color:'rgba(122,98,89,0.88)', fontSize:13 }}>Upload PNG transparan, lalu atur posisi slot foto</p>
           </div>
         </div>
 
         <div style={{ display:'grid', gridTemplateColumns: preview ? 'minmax(300px,360px) 1fr' : '1fr', gap:20, alignItems:'start' }}>
 
           {/* LEFT — form */}
-          <div style={{ background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.08)', borderRadius:16, padding:24, display:'flex', flexDirection:'column', gap:18 }}>
+          <div style={{ background:'rgba(212,43,34,0.04)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:16, padding:24, display:'flex', flexDirection:'column', gap:18 }}>
 
             {/* Drop zone */}
             <div>
@@ -253,14 +253,14 @@ export default function FramesManager({
                 onDragLeave={()=>setDragOver(false)}
                 onDrop={e=>{e.preventDefault();setDragOver(false);const f=e.dataTransfer.files[0];if(f)handleFile(f)}}
                 onClick={()=>fileRef.current?.click()}
-                style={{ border:`2px dashed ${dragOver?'rgba(99,102,241,.7)':'rgba(255,255,255,.1)'}`, borderRadius:12, padding:20, textAlign:'center', cursor:'pointer', background:dragOver?'rgba(99,102,241,.05)':'transparent', transition:'all .2s', minHeight:110, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                style={{ border:`2px dashed ${dragOver?'rgba(212,43,34,.7)':'rgba(212,43,34,0.08)'}`, borderRadius:12, padding:20, textAlign:'center', cursor:'pointer', background:dragOver?'rgba(212,43,34,.05)':'transparent', transition:'all .2s', minHeight:110, display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f)handleFile(f)}}/>
                 {preview
                   ? <img src={preview} alt="preview" style={{maxHeight:90,maxWidth:'100%',objectFit:'contain',borderRadius:8}}/>
                   : <div>
-                      <Upload size={28} color="rgba(255,255,255,.2)" style={{margin:'0 auto 10px'}}/>
-                      <p style={{color:'rgba(255,255,255,.35)',fontSize:14}}>Drag & drop atau klik</p>
-                      <p style={{color:'rgba(255,255,255,.2)',fontSize:12,marginTop:3}}>PNG transparan</p>
+                      <Upload size={28} color="rgba(158,136,128,0.85)" style={{margin:'0 auto 10px'}}/>
+                      <p style={{color:'rgba(122,98,89,0.88)',fontSize:14}}>Drag & drop atau klik</p>
+                      <p style={{color:'rgba(158,136,128,0.85)',fontSize:12,marginTop:3}}>PNG transparan</p>
                     </div>
                 }
               </div>
@@ -270,8 +270,8 @@ export default function FramesManager({
             <div>
               <label style={labelCls}>Nama Frame</label>
               <input type="text" value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="Misal: Frame Bunga Merah" style={inputCls}
-                onFocus={e=>e.target.style.borderColor='rgba(99,102,241,.6)'}
-                onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.1)'}/>
+                onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}
+                onBlur={e=>e.target.style.borderColor='rgba(212,43,34,0.08)'}/>
             </div>
 
             {/* Photo count — selector 1-10 */}
@@ -279,15 +279,15 @@ export default function FramesManager({
               <label style={labelCls}>Jumlah Foto yang Diambil</label>
               <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10 }}>
                 <button onClick={()=>setForm(p=>({...p,photo_count:Math.max(1,p.photo_count-1)}))}
-                  style={{ width:36, height:36, borderRadius:9, background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.1)', color:'white', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  style={{ width:36, height:36, borderRadius:9, background:'rgba(212,43,34,0.055)', border:'1px solid rgba(212,43,34,0.08)', color:'#150C09', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                   −
                 </button>
-                <div style={{ flex:1, background:'rgba(255,255,255,.06)', border:'1.5px solid rgba(99,102,241,.4)', borderRadius:10, padding:'10px 0', textAlign:'center' }}>
-                  <span style={{ color:'white', fontSize:22, fontWeight:700, fontFamily:'Poppins,sans-serif' }}>{form.photo_count}</span>
-                  <span style={{ color:'rgba(255,255,255,.35)', fontSize:13, marginLeft:6 }}>foto</span>
+                <div style={{ flex:1, background:'rgba(212,43,34,0.055)', border:'1.5px solid rgba(212,43,34,.4)', borderRadius:10, padding:'10px 0', textAlign:'center' }}>
+                  <span style={{ color:'#150C09', fontSize:22, fontWeight:700, fontFamily:'Poppins,sans-serif' }}>{form.photo_count}</span>
+                  <span style={{ color:'rgba(122,98,89,0.88)', fontSize:13, marginLeft:6 }}>foto</span>
                 </div>
                 <button onClick={()=>setForm(p=>({...p,photo_count:Math.min(10,p.photo_count+1)}))}
-                  style={{ width:36, height:36, borderRadius:9, background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.1)', color:'white', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  style={{ width:36, height:36, borderRadius:9, background:'rgba(212,43,34,0.055)', border:'1px solid rgba(212,43,34,0.08)', color:'#150C09', fontSize:20, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
                   +
                 </button>
               </div>
@@ -295,12 +295,12 @@ export default function FramesManager({
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {[2,3,4,6,8,10].map(n => (
                   <button key={n} onClick={()=>setForm(p=>({...p,photo_count:n}))}
-                    style={{ padding:'5px 12px', borderRadius:7, border:`1px solid ${form.photo_count===n?'rgba(99,102,241,.6)':'rgba(255,255,255,.09)'}`, background:form.photo_count===n?'rgba(99,102,241,.14)':'rgba(255,255,255,.02)', color:form.photo_count===n?'#a5b4fc':'rgba(255,255,255,.35)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+                    style={{ padding:'5px 12px', borderRadius:7, border:`1px solid ${form.photo_count===n?'rgba(212,43,34,.6)':'rgba(255,255,255,.09)'}`, background:form.photo_count===n?'rgba(212,43,34,.14)':'rgba(212,43,34,0.025)', color:form.photo_count===n?'#E83530':'rgba(122,98,89,0.88)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
                     {n}
                   </button>
                 ))}
               </div>
-              <p style={{ color:'rgba(255,255,255,.2)', fontSize:12, marginTop:8, fontFamily:'Poppins,sans-serif' }}>
+              <p style={{ color:'rgba(158,136,128,0.85)', fontSize:12, marginTop:8, fontFamily:'Poppins,sans-serif' }}>
                 Maksimal 10 foto per sesi
               </p>
             </div>
@@ -315,8 +315,8 @@ export default function FramesManager({
                   if (p) setForm(prev=>({...prev, output_width:p.w, output_height:p.h}))
                 }}
                 style={{...inputCls, width:'100%', cursor:'pointer', marginBottom:8}}
-                onFocus={e=>e.target.style.borderColor='rgba(99,102,241,.6)'}
-                onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.1)'}
+                onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}
+                onBlur={e=>e.target.style.borderColor='rgba(212,43,34,0.08)'}
               >
                 {SIZE_PRESETS.map(p=>(
                   <option key={p.label} value={p.label}>
@@ -330,18 +330,18 @@ export default function FramesManager({
               {/* Manual override */}
               <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:4 }}>
                 <input type="number" value={form.output_width} onChange={e=>setForm(p=>({...p,output_width:Number(e.target.value)}))} style={{...inputCls,flex:1}}
-                  onFocus={e=>e.target.style.borderColor='rgba(99,102,241,.6)'}
-                  onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.1)'}/>
-                <span style={{color:'rgba(255,255,255,.25)',fontSize:18,flexShrink:0}}>×</span>
+                  onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}
+                  onBlur={e=>e.target.style.borderColor='rgba(212,43,34,0.08)'}/>
+                <span style={{color:'rgba(158,136,128,0.95)',fontSize:18,flexShrink:0}}>×</span>
                 <input type="number" value={form.output_height} onChange={e=>setForm(p=>({...p,output_height:Number(e.target.value)}))} style={{...inputCls,flex:1}}
-                  onFocus={e=>e.target.style.borderColor='rgba(99,102,241,.6)'}
-                  onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.1)'}/>
+                  onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}
+                  onBlur={e=>e.target.style.borderColor='rgba(212,43,34,0.08)'}/>
               </div>
-              <p style={{ color:'rgba(255,255,255,.2)', fontSize:11, fontFamily:'Poppins,sans-serif', marginBottom:4 }}>4R=300dpi · A5=300dpi · A4=300dpi</p>
+              <p style={{ color:'rgba(158,136,128,0.85)', fontSize:11, fontFamily:'Poppins,sans-serif', marginBottom:4 }}>4R=300dpi · A5=300dpi · A4=300dpi</p>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {SIZE_PRESETS.map(p => (
                   <button key={p.label} onClick={()=>setForm(prev=>({...prev,output_width:p.w,output_height:p.h}))}
-                    style={{ padding:'5px 12px', background: form.output_width===p.w&&form.output_height===p.h ? 'rgba(99,102,241,.18)' : 'rgba(255,255,255,.04)', border: form.output_width===p.w&&form.output_height===p.h ? '1px solid rgba(99,102,241,.4)' : '1px solid rgba(255,255,255,.09)', borderRadius:6, color: form.output_width===p.w&&form.output_height===p.h ? '#a5b4fc' : 'rgba(255,255,255,.35)', fontSize:12, cursor:'pointer', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+                    style={{ padding:'5px 12px', background: form.output_width===p.w&&form.output_height===p.h ? 'rgba(212,43,34,.18)' : 'rgba(212,43,34,0.04)', border: form.output_width===p.w&&form.output_height===p.h ? '1px solid rgba(212,43,34,.4)' : '1px solid rgba(255,255,255,.09)', borderRadius:6, color: form.output_width===p.w&&form.output_height===p.h ? '#E83530' : 'rgba(122,98,89,0.88)', fontSize:12, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
                     {p.label}
                   </button>
                 ))}
@@ -349,18 +349,18 @@ export default function FramesManager({
             </div>
 
             {error && (
-              <div style={{ padding:'10px 14px', borderRadius:9, background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.15)', color:'#f87171', fontSize:13, display:'flex', gap:7, alignItems:'center' }}>
+              <div style={{ padding:'10px 14px', borderRadius:9, background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.15)', color:'#B82018', fontSize:13, display:'flex', gap:7, alignItems:'center' }}>
                 <AlertCircle size={13}/>{error}
               </div>
             )}
 
             <div style={{ display:'flex', gap:10 }}>
               <button onClick={()=>{setView('list');resetCreate()}}
-                style={{ flex:1, padding:'11px', background:'rgba(255,255,255,.05)', border:'1px solid rgba(255,255,255,.1)', borderRadius:10, color:'rgba(255,255,255,.5)', fontSize:14, cursor:'pointer', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+                style={{ flex:1, padding:'11px', background:'rgba(212,43,34,0.05)', border:'1px solid rgba(212,43,34,0.08)', borderRadius:10, color:'rgba(74,46,34,0.9)', fontSize:14, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
                 Batal
               </button>
               <button onClick={handleCreate} disabled={loading}
-                style={{ flex:2, padding:'11px', background:'linear-gradient(135deg,#6366f1,#8b5cf6)', border:'none', borderRadius:10, color:'white', fontSize:14, fontWeight:600, cursor:loading?'not-allowed':'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:7, opacity:loading?.7:1, fontFamily:"'Plus Jakarta Sans',sans-serif", boxShadow:'0 4px 14px rgba(99,102,241,.3)' }}>
+                style={{ flex:2, padding:'11px', background:'linear-gradient(135deg,#E83530,#C02018)', border:'none', borderRadius:10, color:'#fff', fontSize:14, fontWeight:600, cursor:loading?'not-allowed':'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:7, opacity:loading?.7:1, fontFamily:"'Poppins',sans-serif", boxShadow:'0 4px 14px rgba(212,43,34,.3)' }}>
                 {loading?<><Loader2 size={14} style={{animation:'spin 1s linear infinite'}}/>Uploading...</>:<><Upload size={14}/>Simpan Frame</>}
               </button>
             </div>
@@ -368,19 +368,19 @@ export default function FramesManager({
 
           {/* RIGHT — Slot editor */}
           {preview && (
-            <div style={{ background:'rgba(255,255,255,.03)', border:'1px solid rgba(255,255,255,.07)', borderRadius:16, padding:22 }}>
+            <div style={{ background:'rgba(212,43,34,0.03)', border:'1px solid rgba(212,43,34,0.06)', borderRadius:16, padding:22 }}>
               <div style={{ marginBottom:14, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:10 }}>
                 <div>
-                  <p style={{ color:'white', fontSize:15, fontWeight:600, fontFamily:'Poppins,sans-serif', marginBottom:3 }}>Atur Posisi Slot Foto</p>
-                  <p style={{ color:'rgba(255,255,255,.35)', fontSize:13 }}>
-                    Sesuaikan slot untuk <strong style={{color:'#a5b4fc'}}>{form.photo_count} foto</strong>
+                  <p style={{ color:'#150C09', fontSize:15, fontWeight:600, fontFamily:'Poppins,sans-serif', marginBottom:3 }}>Atur Posisi Slot Foto</p>
+                  <p style={{ color:'rgba(122,98,89,0.88)', fontSize:13 }}>
+                    Sesuaikan slot untuk <strong style={{color:'#E83530'}}>{form.photo_count} foto</strong>
                   </p>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(255,255,255,.04)', border:'1px solid rgba(255,255,255,.07)', borderRadius:9, padding:'7px 14px' }}>
-                  <div style={{ width:64, height:5, borderRadius:3, background:'rgba(255,255,255,.08)', overflow:'hidden' }}>
-                    <div style={{ height:'100%', borderRadius:3, transition:'width .3s', background:pendingSlots.length>0?'#6366f1':'rgba(255,255,255,.1)', width:`${Math.min(100,(pendingSlots.length/Math.max(1,form.photo_count))*100)}%` }}/>
+                <div style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(212,43,34,0.04)', border:'1px solid rgba(212,43,34,0.06)', borderRadius:9, padding:'7px 14px' }}>
+                  <div style={{ width:64, height:5, borderRadius:3, background:'rgba(212,43,34,0.07)', overflow:'hidden' }}>
+                    <div style={{ height:'100%', borderRadius:3, transition:'width .3s', background:pendingSlots.length>0?'#D42B22':'rgba(212,43,34,0.08)', width:`${Math.min(100,(pendingSlots.length/Math.max(1,form.photo_count))*100)}%` }}/>
                   </div>
-                  <span style={{ color:'rgba(255,255,255,.5)', fontSize:13, fontWeight:700, fontFamily:'Poppins,sans-serif', whiteSpace:'nowrap' }}>
+                  <span style={{ color:'rgba(74,46,34,0.9)', fontSize:13, fontWeight:700, fontFamily:'Poppins,sans-serif', whiteSpace:'nowrap' }}>
                     {pendingSlots.length} slot
                   </span>
                 </div>
@@ -406,7 +406,7 @@ export default function FramesManager({
   // VIEW: LIST
   // ══════════════════════
   return (
-    <div style={{ fontFamily:"'Plus Jakarta Sans',sans-serif", padding:'28px 32px', maxWidth:1200, margin:'0 auto' }}>
+    <div style={{ fontFamily:"'Poppins',sans-serif", padding:'28px 32px', maxWidth:1200, margin:'0 auto' }}>
       <style>{`
         @keyframes fade-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         @keyframes spin{to{transform:rotate(360deg)}}
@@ -418,41 +418,41 @@ export default function FramesManager({
       <div style={{ marginBottom:28, display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:14, flexWrap:'wrap' }}>
         <div>
           <div style={{ display:'flex', alignItems:'center', gap:9, marginBottom:6 }}>
-            <div style={{ width:3, height:20, borderRadius:2, background:'linear-gradient(to bottom,#6366f1,#8b5cf6)' }}/>
-            <p style={{ color:'rgba(255,255,255,.3)', fontSize:11, fontWeight:600, letterSpacing:'2px', textTransform:'uppercase', fontFamily:'Poppins,sans-serif' }}>Admin</p>
+            <div style={{ width:3, height:20, borderRadius:2, background:'linear-gradient(to bottom,#E83530,#D42B22)' }}/>
+            <p style={{ color:'rgba(122,98,89,0.8)', fontSize:11, fontWeight:600, letterSpacing:'2px', textTransform:'uppercase', fontFamily:'Poppins,sans-serif' }}>Admin</p>
           </div>
-          <h1 style={{ color:'white', fontSize:28, fontWeight:700, fontFamily:'Poppins,sans-serif', marginBottom:4 }}>Manajemen Frame</h1>
-          <p style={{ color:'rgba(255,255,255,.35)', fontSize:14 }}>{frames.length} frame tersedia</p>
+          <h1 style={{ color:'#150C09', fontSize:28, fontWeight:700, fontFamily:'Poppins,sans-serif', marginBottom:4 }}>Manajemen Frame</h1>
+          <p style={{ color:'rgba(122,98,89,0.88)', fontSize:14 }}>{frames.length} frame tersedia</p>
         </div>
         <button onClick={()=>{resetCreate();setView('create')}}
-          style={{ display:'flex', alignItems:'center', gap:8, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', border:'none', borderRadius:12, padding:'11px 20px', color:'white', fontSize:14, fontWeight:600, cursor:'pointer', boxShadow:'0 4px 16px rgba(99,102,241,.35)', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+          style={{ display:'flex', alignItems:'center', gap:8, background:'linear-gradient(135deg,#E83530,#C02018)', border:'none', borderRadius:12, padding:'11px 20px', color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer', boxShadow:'0 4px 16px rgba(212,43,34,.35)', fontFamily:"'Poppins',sans-serif" }}>
           <Plus size={16}/>Upload Frame
         </button>
       </div>
 
       {successMsg && (
-        <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:11, background:'rgba(16,185,129,.1)', border:'1px solid rgba(16,185,129,.2)', color:'#34d399', fontSize:14, display:'flex', alignItems:'center', gap:9 }}>
+        <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:11, background:'rgba(16,185,129,.1)', border:'1px solid rgba(16,185,129,.2)', color:'#059669', fontSize:14, display:'flex', alignItems:'center', gap:9 }}>
           <Check size={14}/>{successMsg}
         </div>
       )}
 
       {frames.length === 0 ? (
-        <div style={{ border:'2px dashed rgba(255,255,255,.07)', borderRadius:18, padding:'72px 32px', textAlign:'center' }}>
-          <ImageIcon size={48} color="rgba(255,255,255,.1)" style={{margin:'0 auto 16px'}}/>
-          <p style={{color:'rgba(255,255,255,.25)',fontSize:16,fontWeight:500}}>Belum ada frame</p>
-          <p style={{color:'rgba(255,255,255,.15)',fontSize:13,marginTop:6}}>Klik "Upload Frame" untuk menambahkan</p>
+        <div style={{ border:'2px dashed rgba(212,43,34,0.06)', borderRadius:18, padding:'72px 32px', textAlign:'center' }}>
+          <ImageIcon size={48} color="rgba(212,43,34,0.08)" style={{margin:'0 auto 16px'}}/>
+          <p style={{color:'rgba(158,136,128,0.95)',fontSize:16,fontWeight:500}}>Belum ada frame</p>
+          <p style={{color:'rgba(212,43,34,0.10)',fontSize:13,marginTop:6}}>Klik "Upload Frame" untuk menambahkan</p>
         </div>
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:18 }}>
           {frames.map((frame, i) => (
             <div key={frame.id} className="fc"
-              style={{ background:'rgba(255,255,255,.05)', backdropFilter:'blur(20px)', border:'1px solid rgba(255,255,255,.08)', borderRadius:16, overflow:'hidden', boxShadow:'0 4px 14px rgba(0,0,0,.28)', position:'relative', animation:'fade-up .35s ease both', animationDelay:`${i*.04}s` }}>
+              style={{ background:'rgba(212,43,34,0.05)', backdropFilter:'blur(20px)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:16, overflow:'hidden', boxShadow:'0 4px 14px rgba(0,0,0,.28)', position:'relative', animation:'fade-up .35s ease both', animationDelay:`${i*.04}s` }}>
 
               <div style={{ position:'absolute', top:9, left:9, right:9, zIndex:2, display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:5 }}>
-                <div style={{ background:frame.photo_slots?'rgba(99,102,241,.9)':'rgba(245,158,11,.85)', borderRadius:6, padding:'3px 8px', fontSize:11, fontWeight:700, color:'white' }}>
+                <div style={{ background:frame.photo_slots?'rgba(212,43,34,.9)':'rgba(245,158,11,.85)', borderRadius:6, padding:'3px 8px', fontSize:11, fontWeight:700, color:'#150C09' }}>
                   {frame.photo_slots ? `${frame.photo_slots.length} slot` : 'No slot'}
                 </div>
-                <div style={{ background:frame.is_active?'rgba(16,185,129,.9)':'rgba(239,68,68,.85)', borderRadius:6, padding:'3px 8px', fontSize:11, fontWeight:700, color:'white' }}>
+                <div style={{ background:frame.is_active?'rgba(16,185,129,.9)':'rgba(239,68,68,.85)', borderRadius:6, padding:'3px 8px', fontSize:11, fontWeight:700, color:'#150C09' }}>
                   {frame.is_active ? 'AKTIF' : 'OFF'}
                 </div>
               </div>
@@ -464,28 +464,28 @@ export default function FramesManager({
               </div>
 
               <div style={{ padding:'13px 15px' }}>
-                <p style={{ color:'white', fontSize:14, fontWeight:600, marginBottom:8, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{frame.name}</p>
+                <p style={{ color:'#150C09', fontSize:14, fontWeight:600, marginBottom:8, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{frame.name}</p>
                 <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:11 }}>
-                  <span style={{ background:'rgba(99,102,241,.15)', color:'#a5b4fc', border:'1px solid rgba(99,102,241,.2)', borderRadius:6, padding:'3px 8px', fontSize:12, fontWeight:600 }}>
+                  <span style={{ background:'rgba(212,43,34,.15)', color:'#E83530', border:'1px solid rgba(212,43,34,.2)', borderRadius:6, padding:'3px 8px', fontSize:12, fontWeight:600 }}>
                     {frame.photo_count} foto
                   </span>
-                  <span style={{ background:'rgba(255,255,255,.05)', color:'rgba(255,255,255,.3)', border:'1px solid rgba(255,255,255,.07)', borderRadius:6, padding:'3px 8px', fontSize:12 }}>
+                  <span style={{ background:'rgba(212,43,34,0.05)', color:'rgba(122,98,89,0.8)', border:'1px solid rgba(212,43,34,0.06)', borderRadius:6, padding:'3px 8px', fontSize:12 }}>
                     {frame.output_width}x{frame.output_height}
                   </span>
                 </div>
 
                 <div style={{ display:'flex', gap:6 }}>
                   <button onClick={()=>{setEditingFrame(frame);setPendingSlots(frame.photo_slots??[]);setView('edit-slots');setError('')}}
-                    style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4, padding:'7px 0', background:'rgba(99,102,241,.1)', border:'1px solid rgba(99,102,241,.2)', borderRadius:8, color:'#a5b4fc', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+                    style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4, padding:'7px 0', background:'rgba(212,43,34,.1)', border:'1px solid rgba(212,43,34,.2)', borderRadius:8, color:'#E83530', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
                     <Settings2 size={12}/>Slot
                   </button>
                   <button onClick={()=>handleToggle(frame.id,frame.is_active)} disabled={toggleLoading===frame.id}
-                    style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4, padding:'7px 0', background:frame.is_active?'rgba(239,68,68,.08)':'rgba(16,185,129,.08)', border:`1px solid ${frame.is_active?'rgba(239,68,68,.2)':'rgba(16,185,129,.2)'}`, borderRadius:8, color:frame.is_active?'#f87171':'#34d399', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Plus Jakarta Sans',sans-serif" }}>
+                    style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4, padding:'7px 0', background:frame.is_active?'rgba(239,68,68,.08)':'rgba(16,185,129,.08)', border:`1px solid ${frame.is_active?'rgba(239,68,68,.2)':'rgba(16,185,129,.2)'}`, borderRadius:8, color:frame.is_active?'#B82018':'#059669', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
                     {toggleLoading===frame.id?<Loader2 size={12} style={{animation:'spin 1s linear infinite'}}/>:<Power size={12}/>}
                     {frame.is_active?'Off':'On'}
                   </button>
                   <button onClick={()=>handleDelete(frame.id,frame.image_url)} disabled={deleteLoading===frame.id}
-                    style={{ width:34, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(239,68,68,.07)', border:'1px solid rgba(239,68,68,.14)', borderRadius:8, color:'#f87171', cursor:'pointer' }}>
+                    style={{ width:34, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(239,68,68,.07)', border:'1px solid rgba(239,68,68,.14)', borderRadius:8, color:'#B82018', cursor:'pointer' }}>
                     {deleteLoading===frame.id?<Loader2 size={12} style={{animation:'spin 1s linear infinite'}}/>:<Trash2 size={12}/>}
                   </button>
                 </div>
