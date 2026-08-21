@@ -11,7 +11,7 @@ export default async function Page({ params }: { params: Promise<{ uuid: string 
 
   const { data: session, error } = await supabase
     .from('sessions')
-    .select(`id, transaction_code, payment_status, created_at, result_url, clients(name, email), devices(device_name)`)
+    .select(`id, transaction_code, payment_status, created_at, result_url, gif_url, gif_status, video_url, video_status, clients(name, email), devices(device_name)`)
     .eq('transaction_code', uuid)
     .maybeSingle()
 

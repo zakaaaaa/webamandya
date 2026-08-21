@@ -3,7 +3,7 @@ const router = express.Router();
 const { supabase } = require('../middleware/validateDevice');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
-const { generateSignature, getTimestamp } = require('../utils/doku');
+const { generateSignature, generateSignatureGet, getTimestamp } = require('../utils/doku');
 
 const DOKU_BASE_URL = process.env.DOKU_BASE_URL || 'https://api.doku.com';
 
@@ -112,23 +112,70 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-// POST /api/payment/check-status  (polling dari Flutter)
+// POST /api/payment/check-status  (polling tiap 2 detik dari Flutter)
+//
+// PENTING: jangan hanya membaca payment_status dari database. Webhook DOKU
+// (/notification) tidak selalu dikonfigurasi di back office DOKU, sehingga status
+// bisa tidak pernah berubah dan aplikasi mentok di halaman pembayaran.
+// Karena itu di sini kita AKTIF menanyakan status order ke DOKU.
 router.post('/check-status', async (req, res) => {
   const { session_uuid } = req.body;
 
   const { data: session } = await supabase
     .from('sessions')
-    .select('payment_status')
+    .select('id, payment_status, clients(doku_client_id, doku_secret_key)')
     .eq('transaction_code', session_uuid)
-    .single();
+    .maybeSingle();
 
   if (!session) {
     return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
   }
 
-  return res.status(200).json({
-    status: session.payment_status,
-  });
+  // Sudah lunas / gratis -> tidak perlu tanya DOKU lagi.
+  if (session.payment_status === 'paid' || session.payment_status === 'free') {
+    return res.status(200).json({ status: session.payment_status });
+  }
+
+  const { doku_client_id, doku_secret_key } = session.clients || {};
+  if (!doku_client_id || !doku_secret_key) {
+    return res.status(200).json({ status: session.payment_status });
+  }
+
+  try {
+    const targetPath = `/orders/v1/status/${session_uuid}`;
+    const requestId = uuidv4();
+    const timestamp = getTimestamp();
+    const signature = generateSignatureGet(doku_client_id, doku_secret_key, requestId, timestamp, targetPath);
+
+    const dokuResponse = await axios.get(`${DOKU_BASE_URL}${targetPath}`, {
+      headers: {
+        'Client-Id': doku_client_id,
+        'Request-Id': requestId,
+        'Request-Timestamp': timestamp,
+        'Signature': signature,
+      },
+      timeout: 10000,
+    });
+
+    const txStatus = dokuResponse.data?.transaction?.status;
+
+    if (txStatus === 'SUCCESS') {
+      await supabase
+        .from('sessions')
+        .update({ payment_status: 'paid', paid_at: new Date().toISOString() })
+        .eq('id', session.id);
+
+      console.log('[Payment] ✅ Terdeteksi LUNAS via polling DOKU:', session_uuid);
+      return res.status(200).json({ status: 'paid' });
+    }
+
+    return res.status(200).json({ status: session.payment_status, doku_status: txStatus || null });
+  } catch (error) {
+    // Kalau DOKU tidak bisa dihubungi, jangan gagalkan polling —
+    // kembalikan status terakhir yang tersimpan supaya app tetap menunggu.
+    console.error('[Payment] Gagal cek status ke DOKU:', error?.response?.data || error.message);
+    return res.status(200).json({ status: session.payment_status });
+  }
 });
 
 // POST /api/payment/notification (DOKU Webhook — dipanggil DOKU saat customer bayar)

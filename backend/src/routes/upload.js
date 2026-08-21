@@ -2,69 +2,147 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const { supabase } = require('../middleware/validateDevice');
+const { putObject } = require('../utils/storage');
 
-const upload = multer({ storage: multer.memoryStorage() });
-
-// POST /api/photobooth/upload  (foto individual)
-router.post('/', upload.single('photo'), async (req, res) => {
-  const { session_uuid } = req.body;
-  if (!req.file || !session_uuid) {
-    return res.status(400).json({ success: false, message: 'File dan session_uuid wajib ada.' });
-  }
-
-  const { data: session } = await supabase
-    .from('sessions')
-    .select('id, client_id')
-    .eq('transaction_code', session_uuid)
-    .single();
-
-  if (!session) return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
-
-  const fileName = `${session.client_id}/${session.id}/${Date.now()}.jpg`;
-
-  const { error: uploadError } = await supabase.storage
-    .from('photos')
-    .upload(fileName, req.file.buffer, { contentType: req.file.mimetype || 'image/png', upsert: true });
-
-  if (uploadError) return res.status(500).json({ success: false, message: 'Gagal upload foto.' });
-
-  const { data: { publicUrl } } = supabase.storage.from('photos').getPublicUrl(fileName);
-
-  // Simpan ke tabel photos
-  await supabase.from('photos').insert({ session_id: session.id, photo_url: publicUrl });
-
-  return res.status(201).json({ success: true, url: publicUrl });
+const uploadImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB
+});
+const uploadVideo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB
 });
 
-// POST /api/photobooth/upload-final  (hasil akhir gabungan)
-router.post('/final', upload.single('photo'), async (req, res) => {
+async function findSession(session_uuid) {
+  const { data } = await supabase
+    .from('sessions')
+    .select('id, client_id')
+    .eq('transaction_code', session_uuid)
+    .maybeSingle();
+  return data;
+}
+
+// POST /api/photobooth/upload  (foto individual)
+router.post('/', uploadImage.single('photo'), async (req, res) => {
+  const { session_uuid, photo_order } = req.body;
+  if (!req.file || !session_uuid) {
+    return res.status(400).json({ success: false, message: 'File dan session_uuid wajib ada.' });
+  }
+
+  const session = await findSession(session_uuid);
+  if (!session) return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
+
+  const order = parseInt(photo_order, 10);
+  const hasOrder = Number.isInteger(order) && order > 0;
+  // Prefix "photos/" dipertahankan agar sejalan dengan file hasil migrasi dari Supabase.
+  const key = `photos/${session.client_id}/${session.id}/${hasOrder ? `photo-${order}` : Date.now()}.jpg`;
+
+  let stored;
+  try {
+    stored = await putObject({ key, body: req.file.buffer, contentType: req.file.mimetype || 'image/jpeg' });
+  } catch (e) {
+    console.error('[Upload] photo -> R2 gagal:', e.message);
+    return res.status(500).json({ success: false, message: 'Gagal upload foto.' });
+  }
+
+  await supabase.from('photos').insert({
+    session_id: session.id,
+    photo_url: stored.url,
+    photo_order: hasOrder ? order : null,
+    storage_provider: stored.provider,
+    bucket_name: stored.bucket,
+    object_key: stored.key,
+  });
+
+  return res.status(201).json({ success: true, url: stored.url });
+});
+
+// POST /api/photobooth/upload/final  (hasil akhir gabungan)
+router.post('/final', uploadImage.single('photo'), async (req, res) => {
   const { session_uuid } = req.body;
   if (!req.file || !session_uuid) {
     return res.status(400).json({ success: false, message: 'File dan session_uuid wajib ada.' });
   }
 
-  const { data: session } = await supabase
-    .from('sessions')
-    .select('id, client_id')
-    .eq('transaction_code', session_uuid)
-    .single();
-
+  const session = await findSession(session_uuid);
   if (!session) return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
 
-  const fileName = `${session.client_id}/${session.id}/final.png`;
+  const key = `results/${session.client_id}/${session.id}/final.png`;
 
-  const { error: uploadError } = await supabase.storage
-    .from('results')
-    .upload(fileName, req.file.buffer, { contentType: req.file.mimetype || 'image/png', upsert: true });
+  let stored;
+  try {
+    stored = await putObject({ key, body: req.file.buffer, contentType: req.file.mimetype || 'image/png' });
+  } catch (e) {
+    console.error('[Upload] final -> R2 gagal:', e.message);
+    return res.status(500).json({ success: false, message: 'Gagal upload final.' });
+  }
 
-  if (uploadError) return res.status(500).json({ success: false, message: 'Gagal upload final.' });
+  await supabase.from('sessions').update({
+    result_url: stored.url,
+    result_storage_provider: stored.provider,
+    result_bucket_name: stored.bucket,
+    result_object_key: stored.key,
+  }).eq('id', session.id);
 
-  const { data: { publicUrl } } = supabase.storage.from('results').getPublicUrl(fileName);
+  return res.status(200).json({ success: true, url: stored.url });
+});
 
-  // Update result_url di sessions
-  await supabase.from('sessions').update({ result_url: publicUrl }).eq('id', session.id);
+// POST /api/photobooth/upload/video  (rekaman video hasil sesi)
+router.post('/video', uploadVideo.single('video'), async (req, res) => {
+  const { session_uuid } = req.body;
+  if (!req.file || !session_uuid) {
+    return res.status(400).json({ success: false, message: 'File dan session_uuid wajib ada.' });
+  }
 
-  return res.status(200).json({ success: true, url: publicUrl });
+  const session = await findSession(session_uuid);
+  if (!session) return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
+
+  const key = `results/${session.client_id}/${session.id}/video.mp4`;
+
+  let stored;
+  try {
+    stored = await putObject({ key, body: req.file.buffer, contentType: req.file.mimetype || 'video/mp4' });
+  } catch (e) {
+    console.error('[Upload] video -> R2 gagal:', e.message);
+    return res.status(500).json({ success: false, message: 'Gagal upload video.' });
+  }
+
+  await supabase.from('sessions').update({
+    video_url: stored.url,
+    video_object_key: stored.key,
+    video_status: 'ready',
+  }).eq('id', session.id);
+
+  return res.status(201).json({ success: true, url: stored.url });
+});
+
+// POST /api/photobooth/upload/gif  (GIF animasi hasil sesi)
+router.post('/gif', uploadImage.single('gif'), async (req, res) => {
+  const { session_uuid } = req.body;
+  if (!req.file || !session_uuid) {
+    return res.status(400).json({ success: false, message: 'File dan session_uuid wajib ada.' });
+  }
+
+  const session = await findSession(session_uuid);
+  if (!session) return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
+
+  const key = `results/${session.client_id}/${session.id}/animation.gif`;
+
+  let stored;
+  try {
+    stored = await putObject({ key, body: req.file.buffer, contentType: req.file.mimetype || 'image/gif' });
+  } catch (e) {
+    console.error('[Upload] gif -> R2 gagal:', e.message);
+    return res.status(500).json({ success: false, message: 'Gagal upload GIF.' });
+  }
+
+  await supabase.from('sessions').update({
+    gif_url: stored.url,
+    gif_object_key: stored.key,
+    gif_status: 'ready',
+  }).eq('id', session.id);
+
+  return res.status(201).json({ success: true, url: stored.url });
 });
 
 module.exports = router;

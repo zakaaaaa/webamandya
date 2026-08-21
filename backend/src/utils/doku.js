@@ -45,4 +45,19 @@ function getTimestamp() {
   return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-module.exports = { generateSignature, generateDigest, getTimestamp };
+/**
+ * Signature untuk request GET (cek status order ke DOKU).
+ * Bedanya dengan POST: TIDAK ada baris Digest, karena request GET tanpa body.
+ */
+function generateSignatureGet(clientId, secretKey, requestId, timestamp, targetPath) {
+  const componentSignature =
+    `Client-Id:${clientId}\n` +
+    `Request-Id:${requestId}\n` +
+    `Request-Timestamp:${timestamp}\n` +
+    `Request-Target:${targetPath}`;
+
+  const hmac = crypto.createHmac('sha256', secretKey).update(componentSignature).digest();
+  return `HMACSHA256=${hmac.toString('base64')}`;
+}
+
+module.exports = { generateSignature, generateSignatureGet, generateDigest, getTimestamp };
