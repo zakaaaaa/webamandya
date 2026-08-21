@@ -38,5 +38,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|download|login).*)'],
+  // `.*\..*` mengecualikan semua path yang punya ekstensi file — aset di folder
+  // public/ (logo, gambar contoh) tidak melewati _next/static, jadi tanpa ini
+  // aset tersebut ikut dialihkan ke /login dan gambarnya rusak bagi pengunjung
+  // yang belum masuk.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|download|login|.*\\..*).*)'],
 }
