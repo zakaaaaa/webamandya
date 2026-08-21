@@ -2,8 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, Receipt, Images, Frame, Ticket, Monitor, Users, LogOut, Settings, Camera } from 'lucide-react'
+import { LayoutDashboard, Receipt, Images, Frame, Ticket, Monitor, Users, LogOut, Settings, Menu, X } from 'lucide-react'
 
 const adminNav = [
   { href: '/dashboard',    label: 'Overview',  icon: LayoutDashboard },
@@ -22,16 +23,90 @@ const superAdminNav = [
   { href: '/transactions', label: 'Transaksi', icon: Receipt },
 ]
 
+function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <img
+      src="/logo-pk.webp"
+      alt="Pabrik Kenangan"
+      width={compact ? 132 : 168}
+      height={compact ? 74 : 95}
+      style={{ height: 'auto', display: 'block' }}
+    />
+  )
+}
+
 export default function Sidebar({ role }: { role: string }) {
   const pathname = usePathname()
   const router   = useRouter()
   const supabase = createClient()
   const navItems = role === 'super_admin' ? superAdminNav : adminNav
 
+  const [open, setOpen] = useState(false)
+
+  // Tutup drawer setiap pindah halaman — kalau tidak, drawer tetap menutupi
+  // konten yang baru dibuka.
+  useEffect(() => { setOpen(false) }, [pathname])
+
+  // Kunci scroll halaman di belakang drawer + tutup dengan Escape.
+  useEffect(() => {
+    if (!open) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push('/login'); router.refresh()
   }
+
+  const roleBadge = role === 'super_admin' ? 'Super Admin' : 'Admin'
+
+  const navList = (
+    <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {navItems.map(({ href, label, icon: Icon }) => {
+        const isActive = pathname === href
+        return (
+          <Link
+            key={href}
+            href={href}
+            className={`sidebar-link ${isActive ? 'active' : ''}`}
+            aria-current={isActive ? 'page' : undefined}
+          >
+            {isActive && <span className="sidebar-link-rail" />}
+            <Icon size={17} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7 }} />
+            {label}
+          </Link>
+        )
+      })}
+    </nav>
+  )
+
+  const panelInner = (compact: boolean) => (
+    <>
+      <div style={{ padding: '2px 6px 18px' }}>
+        <Brand compact={compact} />
+        <div className="role-badge">{roleBadge}</div>
+      </div>
+
+      <div className="hairline" />
+
+      <div className="menu-label">Menu</div>
+      {navList}
+
+      <div className="hairline" style={{ margin: '16px 4px' }} />
+
+      <button onClick={handleLogout} className="logout-btn">
+        <LogOut size={17} style={{ flexShrink: 0 }} />
+        Keluar
+      </button>
+    </>
+  )
 
   return (
     <>
@@ -39,13 +114,12 @@ export default function Sidebar({ role }: { role: string }) {
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
 
         .sidebar-link {
-          display: flex; align-items: center; gap: 10px;
-          padding: 11px 12px; border-radius: 12px;
-          font-size: 13.5px; font-weight: 500; text-decoration: none;
-          transition: all 0.2s; color: #7A6259;
-          border: 1px solid transparent;
-          font-family: 'Poppins', sans-serif;
-          position: relative;
+          display: flex; align-items: center; gap: 11px;
+          padding: 12px 12px; border-radius: 12px;
+          font-size: 14px; font-weight: 500; text-decoration: none;
+          transition: background .18s, color .18s;
+          color: #7A6259; border: 1px solid transparent;
+          font-family: 'Poppins', sans-serif; position: relative;
         }
         .sidebar-link:hover { color: #D42B22; background: rgba(212,43,34,0.05); }
         .sidebar-link.active {
@@ -53,169 +127,131 @@ export default function Sidebar({ role }: { role: string }) {
           background: linear-gradient(135deg,rgba(212,43,34,0.10),rgba(212,43,34,0.05));
           border-color: rgba(212,43,34,0.20);
         }
+        .sidebar-link:focus-visible,
+        .logout-btn:focus-visible,
+        .drawer-btn:focus-visible { outline: 2px solid #D42B22; outline-offset: 2px; }
+        .sidebar-link-rail {
+          position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+          width: 3px; height: 20px; border-radius: 0 3px 3px 0;
+          background: linear-gradient(to bottom,#E83530,#D42B22);
+        }
         .logout-btn {
-          display: flex; align-items: center; gap: 10px;
-          padding: 11px 12px; border-radius: 12px;
-          font-size: 13.5px; font-weight: 500;
+          display: flex; align-items: center; gap: 11px;
+          padding: 12px 12px; border-radius: 12px;
+          font-size: 14px; font-weight: 500;
           background: none; border: none; cursor: pointer;
-          color: #9E8880; transition: all 0.2s;
+          color: #9E8880; transition: background .18s, color .18s;
           width: 100%; font-family: 'Poppins', sans-serif;
         }
         .logout-btn:hover { color: #C02018; background: rgba(212,43,34,0.06); }
+        .hairline {
+          height: 1px; margin: 0 4px 16px;
+          background: linear-gradient(90deg,transparent,rgba(212,43,34,0.10),transparent);
+        }
+        .menu-label {
+          color: #B0A09A; font-size: 10px; font-weight: 700; letter-spacing: 2px;
+          text-transform: uppercase; padding: 0 12px; margin-bottom: 8px;
+          font-family: 'Poppins',sans-serif;
+        }
+        .role-badge {
+          margin: 12px 0 0; width: fit-content;
+          color: #D42B22; font-size: 9px; letter-spacing: 2px;
+          text-transform: uppercase; font-weight: 700;
+          font-family: 'Poppins',sans-serif;
+          background: rgba(212,43,34,0.07); border: 1px solid rgba(212,43,34,0.16);
+          border-radius: 20px; padding: 4px 10px;
+        }
 
-        /* ── DESKTOP SIDEBAR ── */
-        .sidebar-desktop {
-          position: fixed;
-          top: 0; left: 0; bottom: 0;
-          width: 240px;
-          display: flex;
-          flex-direction: column;
-          padding: 24px 16px;
+        /* ── SIDEBAR (dipakai desktop & drawer mobile) ── */
+        .sidebar-panel {
+          display: flex; flex-direction: column;
+          width: 248px; padding: 22px 16px;
           background: #FFFFFF;
-          border-right: 1px solid rgba(212,43,34,0.08);
-          box-shadow: 1px 0 20px rgba(212,43,34,0.04);
           font-family: 'Poppins', sans-serif;
-          z-index: 100;
           overflow-y: auto;
         }
+        .sidebar-desktop {
+          position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+          border-right: 1px solid rgba(212,43,34,0.08);
+          box-shadow: 1px 0 20px rgba(212,43,34,0.04);
+        }
 
-        /* ── BOTTOM NAVBAR: mobile ── */
-        .bottom-nav {
+        /* ── TOPBAR MOBILE ── */
+        .mobile-topbar {
           display: none;
-          position: fixed;
-          bottom: 0; left: 0; right: 0;
-          height: 64px;
-          background: #FFFFFF;
-          border-top: 1px solid rgba(212,43,34,0.10);
-          box-shadow: 0 -2px 16px rgba(212,43,34,0.06);
-          z-index: 100;
-          align-items: center;
-          justify-content: space-around;
-          padding: 0 4px;
-        }
-        .bottom-nav-item {
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 3px; flex: 1; padding: 6px 2px;
-          text-decoration: none; color: #9E8880;
-          font-size: 10px; font-weight: 600;
+          position: fixed; top: 0; left: 0; right: 0; height: 58px; z-index: 90;
+          align-items: center; gap: 12px; padding: 0 12px;
+          background: rgba(255,255,255,0.94);
+          backdrop-filter: blur(10px);
+          border-bottom: 1px solid rgba(212,43,34,0.09);
           font-family: 'Poppins', sans-serif;
-          border-radius: 10px; transition: all 0.15s;
-          min-width: 0;
         }
-        .bottom-nav-item.active { color: #D42B22; }
-        .bottom-nav-item:hover { color: #D42B22; }
-        .bottom-nav-icon {
-          width: 24px; height: 24px;
+        .drawer-btn {
           display: flex; align-items: center; justify-content: center;
-          border-radius: 8px; transition: all 0.15s;
+          width: 42px; height: 42px; flex-shrink: 0;
+          border-radius: 12px; cursor: pointer;
+          background: rgba(212,43,34,0.06);
+          border: 1px solid rgba(212,43,34,0.14);
+          color: #D42B22;
         }
-        .bottom-nav-item.active .bottom-nav-icon {
-          background: rgba(212,43,34,0.12);
+        .drawer-btn:active { background: rgba(212,43,34,0.12); }
+
+        /* ── DRAWER ── */
+        .drawer-scrim {
+          position: fixed; inset: 0; z-index: 110;
+          background: rgba(21,12,9,0.42);
+          backdrop-filter: blur(2px);
+          animation: scrim-in .18s ease;
         }
-        .bottom-nav-label {
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-          max-width: 52px; text-align: center; line-height: 1;
+        .drawer-panel {
+          position: fixed; top: 0; left: 0; bottom: 0; z-index: 120;
+          box-shadow: 6px 0 32px rgba(21,12,9,0.22);
+          animation: drawer-in .22s cubic-bezier(.22,.61,.36,1);
+          max-width: 86vw;
         }
-        .bottom-nav-logout {
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 3px; flex: 1; padding: 6px 2px;
-          color: #B0A09A; font-size: 10px; font-weight: 600;
-          font-family: 'Poppins', sans-serif;
-          background: none; border: none; cursor: pointer;
-          border-radius: 10px; transition: all 0.15s;
+        @keyframes scrim-in  { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes drawer-in { from { transform: translateX(-100%) } to { transform: translateX(0) } }
+
+        @media (prefers-reduced-motion: reduce) {
+          .drawer-scrim, .drawer-panel { animation: none; }
         }
-        .bottom-nav-logout:hover { color: #C02018; }
 
         @media (max-width: 768px) {
           .sidebar-desktop { display: none !important; }
-          .bottom-nav { display: flex; }
+          .mobile-topbar   { display: flex; }
         }
       `}</style>
 
-      {/* ── DESKTOP SIDEBAR ── */}
-      <aside className="sidebar-desktop">
-        {/* Logo / Brand */}
-        <div style={{ padding: '4px 8px 22px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{
-              width: '38px', height: '38px', borderRadius: '11px', flexShrink: 0,
-              background: 'linear-gradient(135deg,#E83530,#D42B22,#C02018)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(212,43,34,0.30)',
-            }}>
-              <Camera size={20} color="white" />
-            </div>
-            <div style={{ lineHeight: 1.05 }}>
-              <div style={{ fontSize: '15px', fontWeight: 900, color: '#150C09', letterSpacing: '-0.02em' }}>
-                Pabrik
-              </div>
-              <div style={{ fontSize: '15px', fontWeight: 900, color: '#D42B22', letterSpacing: '-0.02em', marginTop: '-2px' }}>
-                Kenangan
-              </div>
-            </div>
-          </div>
-          <div style={{
-            marginTop: '14px',
-            color: '#D42B22', fontSize: '9px', letterSpacing: '2px',
-            textTransform: 'uppercase', fontWeight: 700, fontFamily: 'Poppins,sans-serif',
-            textAlign: 'center',
-            background: 'rgba(212,43,34,0.07)', border: '1px solid rgba(212,43,34,0.16)',
-            borderRadius: '20px', padding: '4px 10px', width: 'fit-content',
-            margin: '14px auto 0',
-          }}>
-            {role === 'super_admin' ? 'Super Admin' : 'Admin'}
-          </div>
-        </div>
+      {/* ── DESKTOP ── */}
+      <aside className="sidebar-panel sidebar-desktop">{panelInner(false)}</aside>
 
-        <div style={{ height: '1px', background: 'linear-gradient(90deg,transparent,rgba(212,43,34,0.10),transparent)', margin: '0 4px 16px' }} />
-
-        <div style={{ color: '#B0A09A', fontSize: '10px', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', padding: '0 12px', marginBottom: '8px', fontFamily: 'Poppins,sans-serif' }}>
-          Menu
-        </div>
-
-        <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
-          {navItems.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href
-            return (
-              <Link key={href} href={href} className={`sidebar-link ${isActive ? 'active' : ''}`}>
-                {isActive && (
-                  <div style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', width: '3px', height: '20px', borderRadius: '0 3px 3px 0', background: 'linear-gradient(to bottom,#E83530,#D42B22)' }} />
-                )}
-                <Icon size={16} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.7 }} />
-                {label}
-              </Link>
-            )
-          })}
-        </nav>
-
-        <div style={{ height: '1px', background: 'linear-gradient(90deg,transparent,rgba(212,43,34,0.10),transparent)', margin: '16px 4px' }} />
-
-        <button onClick={handleLogout} className="logout-btn">
-          <LogOut size={16} style={{ flexShrink: 0 }} />
-          Keluar
+      {/* ── MOBILE TOPBAR ── */}
+      <header className="mobile-topbar">
+        <button
+          className="drawer-btn"
+          onClick={() => setOpen(true)}
+          aria-label="Buka menu"
+          aria-expanded={open}
+        >
+          <Menu size={21} />
         </button>
-      </aside>
+        <Brand compact />
+      </header>
 
-      {/* ── MOBILE BOTTOM NAVBAR ── */}
-      <nav className="bottom-nav">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const isActive = pathname === href
-          return (
-            <Link key={href} href={href} className={`bottom-nav-item ${isActive ? 'active' : ''}`}>
-              <div className="bottom-nav-icon">
-                <Icon size={18} />
-              </div>
-              <span className="bottom-nav-label">{label}</span>
-            </Link>
-          )
-        })}
-        <button onClick={handleLogout} className="bottom-nav-logout">
-          <div style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <LogOut size={18} />
-          </div>
-          <span>Keluar</span>
-        </button>
-      </nav>
+      {/* ── MOBILE DRAWER ── */}
+      {open && (
+        <>
+          <div className="drawer-scrim" onClick={() => setOpen(false)} />
+          <aside className="sidebar-panel drawer-panel" role="dialog" aria-modal="true" aria-label="Menu navigasi">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+              <button className="drawer-btn" onClick={() => setOpen(false)} aria-label="Tutup menu">
+                <X size={20} />
+              </button>
+            </div>
+            {panelInner(true)}
+          </aside>
+        </>
+      )}
     </>
   )
 }

@@ -54,7 +54,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         @media (max-width: 768px) {
           .dashboard-main {
             margin-left: 0;
-            padding: 20px 16px 80px;
+            /* 58px topbar + jarak nyaman; tidak ada lagi bottom nav */
+            padding: 74px 14px 32px;
           }
         }
       `}</style>

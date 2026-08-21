@@ -115,3 +115,36 @@ h1, h2, h3, h4 {
 .fade-in-2 { animation: fadeInUp 0.4s ease 0.1s  forwards; opacity: 0; }
 .fade-in-3 { animation: fadeInUp 0.4s ease 0.15s forwards; opacity: 0; }
 .fade-in-4 { animation: fadeInUp 0.4s ease 0.2s  forwards; opacity: 0; }
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE — perbaikan keterbacaan dashboard di layar sempit
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Tabel tetap boleh menggulir horizontal, tapi jangan sampai satu sel
+     memaksa lebar berlebihan sehingga sebagian besar kolom tersembunyi. */
+  table { font-size: 12.5px; }
+  table th, table td { padding: 10px 12px !important; }
+
+  /* Kartu/panel: kurangi padding besar khas desktop agar konten dapat ruang. */
+  .glass { padding: 16px !important; border-radius: 14px !important; }
+
+  /* Judul halaman tidak perlu sebesar di desktop. */
+  h1 { font-size: 22px !important; line-height: 1.2 !important; }
+  h2 { font-size: 17px !important; }
+
+  /* Semua kontrol memenuhi target sentuh yang nyaman. */
+  button, .dl-btn, select, input[type="text"], input[type="number"],
+  input[type="email"], input[type="password"], input[type="date"] {
+    min-height: 42px;
+  }
+
+  /* Halaman tidak boleh bisa digeser ke samping. */
+  body { overflow-x: hidden; }
+}
+
+/* Beri tahu bahwa tabel bisa digulir, alih-alih terlihat terpotong begitu saja. */
+.table-scroll-hint {
+  font-size: 11px; color: #9E8880; font-family: 'Poppins', sans-serif;
+  padding: 6px 2px 0; display: none;
+}
+@media (max-width: 768px) { .table-scroll-hint { display: block; } }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Loader2, Mail, Lock, ArrowRight, CheckCircle2, Camera } from 'lucide-react'
+import { Loader2, Mail, Lock, ArrowRight, CheckCircle2 } from 'lucide-react'
 
 const TYPING_TEXTS = [
   'Kelola bisnis photobooth kamu.',
@@ -61,20 +61,13 @@ export default function LoginPage() {
   }
 
   const Brand = ({ size = 44 }: { size?: number }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-      <div style={{
-        width: `${size}px`, height: `${size}px`, borderRadius: `${size * 0.28}px`, flexShrink: 0,
-        background: 'linear-gradient(135deg,#E83530,#D42B22,#C02018)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: '0 6px 18px rgba(212,43,34,0.32)',
-      }}>
-        <Camera size={size * 0.5} color="white" />
-      </div>
-      <div style={{ lineHeight: 1.05 }}>
-        <div style={{ fontSize: `${size * 0.42}px`, fontWeight: 900, color: '#150C09', letterSpacing: '-0.02em' }}>Pabrik</div>
-        <div style={{ fontSize: `${size * 0.42}px`, fontWeight: 900, color: '#D42B22', letterSpacing: '-0.02em', marginTop: '-3px' }}>Kenangan</div>
-      </div>
-    </div>
+    <img
+      src="/logo-pk.webp"
+      alt="Pabrik Kenangan"
+      width={size * 4.2}
+      height={size * 2.36}
+      style={{ height: 'auto', maxWidth: '100%', display: 'block' }}
+    />
   )
 
   return (

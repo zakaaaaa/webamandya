@@ -23,7 +23,7 @@ type Props = {
   onChange: (slots: PhotoSlot[]) => void
 }
 
-const PREVIEW_PHOTO = 'https://dmfzqdalantgqgqftalv.supabase.co/storage/v1/object/public/element-web/preview.webp'
+const PREVIEW_PHOTO = '/slot-preview.webp'
 
 const COLORS = [
   { b:'#D42B22', bg:'rgba(212,43,34,.85)',  t:'#fff' },
@@ -122,22 +122,44 @@ export default function FrameSlotEditor({
     width: Math.max(12, s.width), height: Math.max(12, s.height),
   })
 
-  const startDrag = useCallback((e: React.MouseEvent, id: number) => {
+  // Semua interaksi memakai Pointer Event, bukan Mouse Event: satu jalur yang
+  // menangani mouse, jari, dan stylus sekaligus. Sebelumnya editor ini hanya
+  // mendengar event mouse, sehingga di HP slot sama sekali tidak bisa digeser.
+  const trackPointer = (
+    pointerId: number,
+    onMove: (e: PointerEvent) => void,
+  ) => {
+    const move = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return
+      // Cegah halaman ikut ter-scroll saat jari menggeser slot.
+      if (e.cancelable) e.preventDefault()
+      onMove(e)
+    }
+    const end = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+    }
+    window.addEventListener('pointermove', move, { passive: false })
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+  }
+
+  const startDrag = useCallback((e: React.PointerEvent, id: number) => {
     e.preventDefault(); e.stopPropagation(); setSelected(id)
     const s0 = slots.find(s=>s.id===id)!
     const ox=s0.x, oy=s0.y, mx=e.clientX, my=e.clientY
-    const move = (me: MouseEvent) => setSlots(prev => prev.map(s =>
+    trackPointer(e.pointerId, (me) => setSlots(prev => prev.map(s =>
       s.id===id ? clamp({...s, x:Math.round(ox+(me.clientX-mx)/scale), y:Math.round(oy+(me.clientY-my)/scale)}) : s
-    ))
-    const up = () => { window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up) }
-    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up)
+    )))
   }, [slots, scale])
 
-  const startResize = useCallback((e: React.MouseEvent, id: number, h: string) => {
-    e.preventDefault(); e.stopPropagation()
+  const startResize = useCallback((e: React.PointerEvent, id: number, h: string) => {
+    e.preventDefault(); e.stopPropagation(); setSelected(id)
     const orig = { ...slots.find(s=>s.id===id)! }
     const mx=e.clientX, my=e.clientY
-    const move = (me: MouseEvent) => {
+    trackPointer(e.pointerId, (me) => {
       const dx=(me.clientX-mx)/scale, dy=(me.clientY-my)/scale
       setSlots(prev => prev.map(s => {
         if (s.id!==id) return s
@@ -148,24 +170,32 @@ export default function FrameSlotEditor({
         if (h.includes('n')) { y=Math.round(orig.y+dy); height=Math.round(Math.max(12,orig.height-dy)) }
         return clamp({...s,x,y,width,height})
       }))
-    }
-    const up = () => { window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up) }
-    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up)
+    })
   }, [slots, scale])
 
-  const startRotate = useCallback((e: React.MouseEvent, id: number) => {
-    e.preventDefault(); e.stopPropagation()
+  const startRotate = useCallback((e: React.PointerEvent, id: number) => {
+    e.preventDefault(); e.stopPropagation(); setSelected(id)
     const slot = slots.find(s=>s.id===id)!
     const rect = canvasRef.current!.getBoundingClientRect()
     const cx = (slot.x+slot.width/2)*scale+rect.left
     const cy = (slot.y+slot.height/2)*scale+rect.top
-    const move = (me: MouseEvent) => {
+    trackPointer(e.pointerId, (me) => {
       const deg = Math.atan2(me.clientY-cy, me.clientX-cx)*(180/Math.PI)+90
       setSlots(prev => prev.map(s => s.id===id ? {...s, rotation:Math.round(((deg%360)+360)%360)} : s))
-    }
-    const up = () => { window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up) }
-    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up)
+    })
   }, [slots, scale])
+
+  // Geser slot terpilih dengan tombol — di layar kecil menggeser presisi dengan
+  // jari itu sulit, jadi sediakan jalur non-drag.
+  const nudge = (dx: number, dy: number) => {
+    if (selected == null) return
+    setSlots(prev => prev.map(s => s.id===selected ? clamp({...s, x:s.x+dx, y:s.y+dy}) : s))
+  }
+  const resizeBy = (dw: number, dh: number) => {
+    if (selected == null) return
+    setSlots(prev => prev.map(s => s.id===selected
+      ? clamp({...s, width:Math.max(12,s.width+dw), height:Math.max(12,s.height+dh)}) : s))
+  }
 
   const addSlot = () => {
     const newId = Math.max(0, ...slots.map(s=>s.id)) + 1
@@ -187,6 +217,23 @@ export default function FrameSlotEditor({
         @keyframes slot-blink{0%,100%{opacity:1}50%{opacity:.6}}
         .slot-sel{animation:slot-blink 1.8s ease infinite}
         .rh:hover{transform:scale(1.4)!important;background:#fff!important}
+
+        /* Handle resize hanya 10px — cukup untuk kursor, terlalu kecil untuk jari.
+           Perbesar area sentuhnya lewat pseudo-element tanpa mengubah tampilan. */
+        .rh::after{content:'';position:absolute;inset:-6px}
+        @media (pointer: coarse) {
+          .rh::after{inset:-15px}
+        }
+        /* Nudge: geser presisi tanpa drag, penting di layar kecil */
+        .nudge-btn{
+          display:flex;align-items:center;justify-content:center;
+          width:38px;height:34px;border-radius:9px;cursor:pointer;
+          background:rgba(212,43,34,.06);border:1px solid rgba(212,43,34,.14);
+          color:#D42B22;font-family:'Poppins',sans-serif;font-size:13px;font-weight:600;
+        }
+        .nudge-btn:active{background:rgba(212,43,34,.15)}
+        .nudge-btn:disabled{opacity:.35;cursor:not-allowed}
+        .nudge-btn:focus-visible{outline:2px solid #D42B22;outline-offset:2px}
         .slot-row:hover{background:rgba(212,43,34,0.05)!important}
         .tool-btn:hover{background:rgba(212,43,34,0.08)!important;color:#D42B22!important}
         .zoom-btn:hover{background:rgba(212,43,34,.2)!important;border-color:rgba(212,43,34,.4)!important;}
@@ -196,9 +243,14 @@ export default function FrameSlotEditor({
         .fse-side  { width:210px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; }
         @media (max-width: 768px) {
           .fse-body  { flex-direction:column; }
-          .fse-side  { width:100% !important; flex-direction:row; flex-wrap:wrap; gap:8px; }
-          .fse-slot-list { flex:1; min-width:200px; }
-          .fse-legend    { width:100% !important; }
+          /* Sebelumnya panel samping dipaksa jadi baris dan isinya saling
+             berhimpitan di layar sempit. Satu kolom penuh jauh lebih terbaca. */
+          .fse-side  { width:100% !important; flex-direction:column; gap:12px; }
+          .fse-slot-list { max-height:240px; }
+          .fse-legend, .fse-nudge { width:100% !important; }
+          /* Target sentuh minimal ~44px sesuai panduan mobile */
+          .tool-btn  { padding:10px 14px !important; min-height:42px; }
+          .zoom-btn  { min-width:38px; min-height:38px; }
         }
       `}</style>
 
@@ -328,12 +380,12 @@ export default function FrameSlotEditor({
                   <div key={slot.id}>
                     {/* Rotate handle — above slot */}
                     {isSel && (
-                      <div onMouseDown={e=>startRotate(e,slot.id)} title="Drag untuk rotasi"
+                      <div onPointerDown={e=>startRotate(e,slot.id)} title="Drag untuk rotasi"
                         style={{
                           position:'absolute', left:sx+sw/2-14, top:sy-ROT_OFFSET,
                           width:28, height:28, borderRadius:'50%',
                           background:c.b, border:'2.5px solid white',
-                          cursor:'grab', zIndex:55,
+                          cursor:'grab', zIndex:55, touchAction:'none',
                           display:'flex', alignItems:'center', justifyContent:'center',
                           boxShadow:`0 2px 8px rgba(0,0,0,.7),0 0 0 3px ${c.b}40`,
                         }}>
@@ -346,7 +398,7 @@ export default function FrameSlotEditor({
 
                     {/* Trash handle — right of slot */}
                     {isSel && (
-                      <div onMouseDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();removeSlot(slot.id)}}
+                      <div onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();removeSlot(slot.id)}}
                         title="Hapus slot"
                         style={{
                           position:'absolute',
@@ -366,7 +418,7 @@ export default function FrameSlotEditor({
                     <div
                       className={isSel ? 'slot-sel' : ''}
                       onClick={e=>{e.stopPropagation();setSelected(slot.id)}}
-                      onMouseDown={e=>startDrag(e,slot.id)}
+                      onPointerDown={e=>startDrag(e,slot.id)}
                       style={{
                         position:'absolute', left:sx, top:sy, width:sw, height:sh,
                         transform:`rotate(${slot.rotation}deg)`,
@@ -375,7 +427,7 @@ export default function FrameSlotEditor({
                         border:`${isSel?2.5:1.5}px solid ${c.b}`,
                         background: c.bg,
                         boxShadow: isSel ? `0 0 0 2px ${c.b}30, 0 4px 16px rgba(0,0,0,.4)` : `0 2px 8px rgba(0,0,0,.3)`,
-                        cursor:'move', overflow:'hidden',
+                        cursor:'move', overflow:'hidden', touchAction:'none',
                       }}>
 
                       {/* Big slot number — centered */}
@@ -421,7 +473,7 @@ export default function FrameSlotEditor({
                       {/* Resize handles */}
                       {isSel && HANDLES.map(h=>(
                         <div key={h.id} className="rh"
-                          onMouseDown={e=>startResize(e,slot.id,h.id)}
+                          onPointerDown={e=>startResize(e,slot.id,h.id)}
                           style={{
                             position:'absolute',
                             left:   h.cx===0?-5:h.cx===.5?'50%':undefined,
@@ -432,7 +484,7 @@ export default function FrameSlotEditor({
                             marginTop:  h.cy===.5?-5:undefined,
                             width:10, height:10, borderRadius:2,
                             background:c.b, border:'2px solid white',
-                            cursor:CUR[h.id], zIndex:50,
+                            cursor:CUR[h.id], zIndex:50, touchAction:'none',
                             boxShadow:'0 1px 4px rgba(0,0,0,.8)',
                             transition:'transform .1s, background .1s',
                           }}/>
@@ -476,6 +528,36 @@ export default function FrameSlotEditor({
 
         {/* SIDE PANEL */}
         <div className="fse-side">
+
+          {/* Kontrol presisi: menggeser slot beberapa piksel dengan jari nyaris
+              mustahil, jadi sediakan tombol. Berguna juga di desktop. */}
+          <div className="fse-nudge" style={{ width:'100%', padding:'12px 14px', borderRadius:10, background:'#fff', border:'1px solid rgba(212,43,34,.12)' }}>
+            <p style={{ color:'rgba(122,98,89,0.88)', fontSize:11, fontWeight:700, letterSpacing:'1.4px', textTransform:'uppercase', fontFamily:'Poppins,sans-serif', margin:'0 0 9px' }}>
+              {selected == null ? 'Pilih slot dulu' : `Atur slot #${selected}`}
+            </p>
+            <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
+              <div>
+                <div style={{ fontSize:10, color:'#9E8880', marginBottom:5, fontFamily:'Poppins,sans-serif' }}>Posisi</div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,38px)', gap:4, justifyContent:'start' }}>
+                  <span/>
+                  <button className="nudge-btn" disabled={selected==null} onClick={()=>nudge(0,-5)} aria-label="Geser ke atas">↑</button>
+                  <span/>
+                  <button className="nudge-btn" disabled={selected==null} onClick={()=>nudge(-5,0)} aria-label="Geser ke kiri">←</button>
+                  <button className="nudge-btn" disabled={selected==null} onClick={()=>nudge(5,0)}  aria-label="Geser ke kanan">→</button>
+                  <button className="nudge-btn" disabled={selected==null} onClick={()=>nudge(0,5)}  aria-label="Geser ke bawah">↓</button>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:10, color:'#9E8880', marginBottom:5, fontFamily:'Poppins,sans-serif' }}>Ukuran</div>
+                <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                  <button className="nudge-btn" disabled={selected==null} onClick={()=>resizeBy(-8,0)} aria-label="Kurangi lebar">W−</button>
+                  <button className="nudge-btn" disabled={selected==null} onClick={()=>resizeBy(8,0)}  aria-label="Tambah lebar">W+</button>
+                  <button className="nudge-btn" disabled={selected==null} onClick={()=>resizeBy(0,-8)} aria-label="Kurangi tinggi">H−</button>
+                  <button className="nudge-btn" disabled={selected==null} onClick={()=>resizeBy(0,8)}  aria-label="Tambah tinggi">H+</button>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <p style={{ color:'rgba(122,98,89,0.88)', fontSize:12, fontWeight:600, letterSpacing:'1.5px', textTransform:'uppercase', fontFamily:'Poppins,sans-serif' }}>
             Daftar Slot ({slots.length})
