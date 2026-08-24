@@ -357,6 +357,62 @@ export default function DownloadPage({
 
   const busy = (key:string) => downloading === key
 
+  // ── Pengaduan ──────────────────────────────────────────────────────────
+  // Dikirim langsung ke backend VPS (bukan lewat route Next.js) karena di
+  // sanalah token Telegram dan kredensial SMTP disimpan.
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.pabrikenangan.my.id'
+
+  const REASONS = [
+    { key:'foto_tidak_muncul',  label:'Foto tidak muncul' },
+    { key:'foto_tidak_lengkap', label:'Foto tidak lengkap' },
+    { key:'hasil_salah',        label:'Hasil tidak sesuai' },
+    { key:'lainnya',            label:'Lainnya' },
+  ]
+
+  const [reportOpen, setReportOpen]   = useState(false)
+  const [reportSent, setReportSent]   = useState<string|null>(null)
+  const [reportBusy, setReportBusy]   = useState(false)
+  const [reportError, setReportError] = useState<string|null>(null)
+  const [form, setForm] = useState({
+    email: '',
+    whatsapp: '',
+    // Kalau memang tidak ada foto sama sekali, keluhannya sudah jelas —
+    // jangan suruh pelanggan memilih yang sudah kita tahu jawabannya.
+    reason: photoCount === 0 ? 'foto_tidak_muncul' : 'foto_tidak_lengkap',
+  })
+
+  const submitReport = async () => {
+    const email = form.email.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setReportError('Alamat emailnya sepertinya belum benar.')
+      return
+    }
+    setReportBusy(true); setReportError(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/complaints`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transaction_code: uuid,
+          email,
+          whatsapp: form.whatsapp.trim() || undefined,
+          reason: form.reason,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setReportError(data?.message || 'Gagal mengirim laporan. Coba lagi sebentar lagi.')
+        return
+      }
+      setReportSent(data?.message || 'Laporan kamu sudah kami terima.')
+      setReportOpen(false)
+    } catch {
+      setReportError('Tidak bisa terhubung ke server. Cek koneksi kamu, lalu coba lagi.')
+    } finally {
+      setReportBusy(false)
+    }
+  }
+
   // Strip dirakit ulang di browser dengan layout pixel-perfect sama Flutter —
   // dipakai hanya selama strip final belum diunggah mesin.
   const StripPreview = () => (
@@ -438,6 +494,41 @@ export default function DownloadPage({
           display:flex;align-items:center;justify-content:center;
           background:rgba(21,12,9,.62);color:#fff;backdrop-filter:blur(4px);
         }
+
+        /* ── Formulir pengaduan ── */
+        .field{
+          width:100%;padding:12px 14px;border-radius:12px;
+          border:1px solid rgba(212,43,34,0.18);background:#fff;color:#150C09;
+          font-family:'Poppins',sans-serif;font-size:14px;outline:none;
+          transition:border-color .2s,box-shadow .2s;
+        }
+        .field::placeholder{color:#C7B8B2}
+        .field:focus{border-color:#D42B22;box-shadow:0 0 0 3px rgba(212,43,34,.10)}
+        .field-label{
+          display:block;font-size:11.5px;font-weight:700;color:#7A6259;
+          letter-spacing:.06em;text-transform:uppercase;margin-bottom:7px;
+        }
+        .chip{
+          padding:9px 14px;border-radius:11px;cursor:pointer;
+          border:1px solid rgba(212,43,34,0.18);background:#fff;color:#7A6259;
+          font-family:'Poppins',sans-serif;font-size:12.5px;font-weight:600;
+        }
+        .chip.active{background:rgba(212,43,34,.08);border-color:#D42B22;color:#C02018}
+        .chip:focus-visible{outline:2px solid #D42B22;outline-offset:2px}
+
+        .modal-scrim{
+          position:fixed;inset:0;z-index:150;padding:20px;
+          background:rgba(21,12,9,.55);backdrop-filter:blur(6px);
+          display:flex;align-items:center;justify-content:center;
+          animation:soft-in .15s ease both;
+        }
+        .modal-box{
+          width:100%;max-width:420px;background:#fff;border-radius:20px;
+          border:1px solid rgba(212,43,34,0.12);
+          max-height:min(88vh,88dvh);overflow-y:auto;
+          padding:26px 22px;animation:rise .25s ease both;
+        }
+        @media (max-width:420px){ .modal-box{padding:22px 18px} }
 
         .lb{animation:soft-in .15s ease both}
         ::-webkit-scrollbar{width:5px;height:5px}
@@ -673,6 +764,45 @@ export default function DownloadPage({
             </Section>
           )}
 
+          {/* ── PENGADUAN ── */}
+          <section style={{ marginTop:36 }}>
+            {reportSent ? (
+              <div className="card" style={{ padding:'18px 18px', display:'flex', gap:12, alignItems:'flex-start' }}>
+                <div style={{ width:34, height:34, borderRadius:11, flexShrink:0, background:'rgba(30,122,75,0.10)', color:'#1E7A4B', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <Check size={17} strokeWidth={3}/>
+                </div>
+                <div>
+                  <p style={{ fontSize:13.5, fontWeight:600, marginBottom:3 }}>Laporan terkirim</p>
+                  <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.55 }}>{reportSent}</p>
+                </div>
+              </div>
+            ) : photoCount === 0 ? (
+              /* Tidak ada satu pun foto: ini keadaan yang paling bikin panik,
+                 jadi ajakan melapornya ditampilkan terang-terangan. */
+              <div className="card" style={{ padding:'20px 18px', textAlign:'center' }}>
+                <p style={{ fontSize:14, fontWeight:600, marginBottom:6 }}>Fotonya belum muncul?</p>
+                <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.55, marginBottom:14 }}>
+                  Tinggalkan email kamu — hasilnya kami kirim ke sana begitu tersedia.
+                </p>
+                <button className="btn btn-primary" onClick={()=>{ setReportError(null); setReportOpen(true) }}>
+                  <AlertCircle size={15}/>Laporkan
+                </button>
+              </div>
+            ) : (
+              <div style={{ textAlign:'center' }}>
+                <button
+                  onClick={()=>{ setReportError(null); setReportOpen(true) }}
+                  style={{
+                    background:'none', border:'none', cursor:'pointer', padding:'8px 12px',
+                    fontFamily:"'Poppins',sans-serif", fontSize:12.5, color:'#9E8880',
+                    textDecoration:'underline', textUnderlineOffset:3,
+                  }}>
+                  Ada yang kurang dengan hasilnya? Laporkan
+                </button>
+              </div>
+            )}
+          </section>
+
           {/* ── FOOTER ── */}
           <footer className="rise-3" style={{ marginTop:44, textAlign:'center' }}>
             <div style={{ height:1, background:'rgba(212,43,34,0.10)', marginBottom:20 }}/>
@@ -686,6 +816,79 @@ export default function DownloadPage({
           </footer>
         </div>
       </div>
+
+      {/* ── MODAL PENGADUAN ── */}
+      {reportOpen && (
+        <div className="modal-scrim" onClick={()=>!reportBusy && setReportOpen(false)}>
+          <div className="modal-box" onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Laporkan masalah">
+            <h2 style={{ fontSize:17, fontWeight:800, marginBottom:6, letterSpacing:'-0.01em' }}>
+              Laporkan masalah
+            </h2>
+            <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.55, marginBottom:20 }}>
+              Kami kirim hasil fotomu ke email yang kamu tulis di bawah, dan petugas
+              di lokasi langsung diberi tahu.
+            </p>
+
+            <div style={{ marginBottom:16 }}>
+              <label className="field-label" htmlFor="pk-email">Email <span style={{ color:'#C02018' }}>*</span></label>
+              <input
+                id="pk-email" className="field" type="email" inputMode="email"
+                autoComplete="email" placeholder="nama@email.com"
+                value={form.email}
+                onChange={e=>setForm(f=>({ ...f, email:e.target.value }))}
+              />
+            </div>
+
+            <div style={{ marginBottom:16 }}>
+              <label className="field-label" htmlFor="pk-wa">WhatsApp <span style={{ fontWeight:500, textTransform:'none', letterSpacing:0 }}>(opsional)</span></label>
+              <input
+                id="pk-wa" className="field" type="tel" inputMode="tel"
+                autoComplete="tel" placeholder="08xxxxxxxxxx"
+                value={form.whatsapp}
+                onChange={e=>setForm(f=>({ ...f, whatsapp:e.target.value }))}
+              />
+            </div>
+
+            <div style={{ marginBottom:20 }}>
+              <span className="field-label">Masalahnya apa?</span>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+                {REASONS.map(r => (
+                  <button
+                    key={r.key} type="button"
+                    className={`chip ${form.reason === r.key ? 'active' : ''}`}
+                    onClick={()=>setForm(f=>({ ...f, reason:r.key }))}>
+                    {r.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {reportError && (
+              <div style={{ display:'flex', gap:9, alignItems:'flex-start', marginBottom:16, padding:'11px 13px', borderRadius:11, background:'rgba(192,32,24,0.06)', border:'1px solid rgba(192,32,24,0.18)' }}>
+                <AlertCircle size={15} color="#C02018" style={{ flexShrink:0, marginTop:1 }}/>
+                <p style={{ fontSize:12.5, color:'#C02018', lineHeight:1.5 }}>{reportError}</p>
+              </div>
+            )}
+
+            <div style={{ display:'flex', gap:10 }}>
+              <button
+                className="btn btn-ghost" style={{ flex:1 }}
+                disabled={reportBusy}
+                onClick={()=>setReportOpen(false)}>
+                Batal
+              </button>
+              <button
+                className="btn btn-primary" style={{ flex:2 }}
+                disabled={reportBusy}
+                onClick={submitReport}>
+                {reportBusy
+                  ? <><Loader2 size={15} style={{ animation:'spin .8s linear infinite' }}/>Mengirim…</>
+                  : 'Kirim laporan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── LIGHTBOX ── */}
       {lightbox && (

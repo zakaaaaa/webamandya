@@ -16,6 +16,7 @@ app.use('/api/photobooth/session', require('./routes/session'));
 app.use('/api/photobooth/upload',  require('./routes/upload'));
 app.use('/api/photobooth/photos',  require('./routes/photos'));
 app.use('/api/photobooth/email',   require('./routes/email'));
+app.use('/api/complaints',         require('./routes/complaints'));
 app.use('/api/payment',            require('./routes/payment'));
 app.use('/api/frames',             require('./routes/frames'));
 app.use('/download', require('./routes/download'));
