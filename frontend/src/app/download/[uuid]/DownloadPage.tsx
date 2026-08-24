@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Download, Images, Sparkles, Clock, CheckCircle2, Camera, Loader2, Film } from 'lucide-react'
+import { Download, Check, Loader2, Film, Sparkles, AlertCircle } from 'lucide-react'
 
-// pending  = mesin belum mulai
+// pending    = mesin belum mulai
 // processing = mesin sedang merender/mengunggah
-// ready    = file sudah bisa diunduh
-// failed   = sudah dicoba dan gagal
+// ready      = file sudah bisa diunduh
+// failed     = sudah dicoba dan gagal
 type MediaStatus = 'pending' | 'processing' | 'ready' | 'failed' | null
 
 type Session = {
@@ -26,8 +26,24 @@ type Photo = { photo_url: string; photo_order: number }
 
 // Selama mesin masih bekerja, halaman menanyakan statusnya berkala supaya
 // pelanggan melihat hasilnya muncul sendiri tanpa perlu refresh manual.
-const POLL_INTERVAL_MS = 4000
+const POLL_INTERVAL_MS  = 4000
 const POLL_MAX_ATTEMPTS = 75 // ~5 menit, lalu berhenti agar tidak polling selamanya
+
+// ── Kalibrasi indikator progres ──────────────────────────────────────────
+// Diukur dari 10 sesi produksi yang selesai penuh sejak 21 Agustus 2026,
+// dihitung dari foto terakhir tersimpan sampai media terakhir siap:
+//   5,6 · 6,1 · 8,4 · 9,6 · 12,4 · 32,1 · 40,1 · 49,0 · 78,7 · 303,6 detik
+//   → median 32 detik, rata-rata tanpa outlier 27 detik.
+//
+// Browser pelanggan TIDAK bisa tahu persentase unggahan yang sebenarnya:
+// mesin photobooth yang mengunggah ke R2, dan yang tersimpan di database
+// hanya status per media, tanpa angka progres. Jadi angka pada cincin
+// digerakkan waktu, TAPI setiap langkah nyata (foto → strip → GIF → video)
+// mengunci lantainya, dan angkanya tidak pernah menyentuh 100% sebelum
+// filenya benar-benar ada.
+const STEP_TAU_MS   = 11000  // kecepatan merayap dalam satu langkah
+const SLOW_AFTER_MS = 90000  // lewat ini, akui bahwa prosesnya lebih lama
+const CREEP_CEILING = 95     // pagar: tanpa bukti file siap, berhenti di sini
 
 // Layout sama persis Flutter
 const LAYOUTS: Record<number, {
@@ -40,21 +56,56 @@ const LAYOUTS: Record<number, {
   4: { topPadding:25,  bottomPadding:40,  leftPadding:10, rightPadding:5,  horizontalSpacing:5,  verticalSpacing:13,  cols:2 },
 }
 
-// Satu baris status di panel transparansi.
-function ProgressRow({ label, state }: { label: string; state: NonNullable<MediaStatus> | 'processing' }) {
-  const map = {
-    ready:      { text: 'siap',            color: '#1E7A4B', icon: <CheckCircle2 size={12} color="#1E7A4B"/> },
-    processing: { text: 'sedang dibuat',   color: '#B06A12', icon: <Loader2 size={12} color="#B06A12" style={{animation:'spin .9s linear infinite'}}/> },
-    pending:    { text: 'menunggu giliran',color: '#8A7268', icon: <Clock size={12} color="#8A7268"/> },
-    failed:     { text: 'tidak tersedia',  color: '#8A7268', icon: <Clock size={12} color="#8A7268"/> },
-  } as const
-  const s = map[state] ?? map.pending
+// ── Cincin progres ───────────────────────────────────────────────────────
+function ProgressRing({ percent, caption, hint }: { percent:number; caption:string; hint?:string }) {
+  const R = 46
+  const C = 2 * Math.PI * R
   return (
-    <div style={{display:'flex',alignItems:'center',gap:7,fontSize:11.5}}>
-      {s.icon}
-      <span style={{color:'rgba(74,46,34,0.9)'}}>{label}</span>
-      <span style={{marginLeft:'auto',color:s.color,fontWeight:600}}>{s.text}</span>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
+      <div style={{ position:'relative', width:120, height:120 }}>
+        <svg width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
+          <defs>
+            <linearGradient id="pk-ring" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%"   stopColor="#E83530"/>
+              <stop offset="100%" stopColor="#C02018"/>
+            </linearGradient>
+          </defs>
+          <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(212,43,34,0.12)" strokeWidth="8"/>
+          <circle
+            cx="60" cy="60" r={R} fill="none"
+            stroke="url(#pk-ring)" strokeWidth="8" strokeLinecap="round"
+            strokeDasharray={C}
+            strokeDashoffset={C * (1 - percent / 100)}
+            transform="rotate(-90 60 60)"
+            style={{ transition:'stroke-dashoffset .7s cubic-bezier(.4,0,.2,1)' }}
+          />
+        </svg>
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <span style={{ fontSize:26, fontWeight:800, color:'#150C09', letterSpacing:'-0.02em', lineHeight:1 }}>
+            {percent}<span style={{ fontSize:14, fontWeight:700, color:'#9E8880' }}>%</span>
+          </span>
+        </div>
+      </div>
+      <div style={{ textAlign:'center' }}>
+        <p style={{ fontSize:14, fontWeight:600, color:'#150C09', marginBottom:4 }}>{caption}</p>
+        {hint && <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.55, maxWidth:290, margin:'0 auto' }}>{hint}</p>}
+      </div>
     </div>
+  )
+}
+
+// ── Satu blok hasil ──────────────────────────────────────────────────────
+function Section({ title, meta, children }: { title:string; meta?:string; children:React.ReactNode }) {
+  return (
+    <section style={{ marginTop:36 }}>
+      <div style={{ display:'flex', alignItems:'baseline', gap:10, marginBottom:14, flexWrap:'wrap' }}>
+        <h2 style={{ fontSize:13, fontWeight:700, color:'#4A2E22', letterSpacing:'0.08em', textTransform:'uppercase' }}>
+          {title}
+        </h2>
+        {meta && <span style={{ fontSize:12, color:'#B0A09A' }}>{meta}</span>}
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -64,7 +115,6 @@ export default function DownloadPage({
   session: Session; photos: Photo[]; uuid: string
   frameWidth: number; frameHeight: number
 }) {
-  const [activeTab, setActiveTab]     = useState<'strip'|'photos'|'gif'|'video'>('strip')
   // Status media yang diperbarui lewat polling; nilai awal dari server render.
   const [media, setMedia] = useState({
     result_url:   session.result_url,
@@ -73,13 +123,13 @@ export default function DownloadPage({
     video_url:    session.video_url ?? null,
     video_status: (session.video_status ?? null) as MediaStatus,
   })
-  const [gifFrame, setGifFrame]       = useState(0)
   const [lightbox, setLightbox]       = useState<string|null>(null)
   const [downloading, setDownloading] = useState<string|null>(null)
   const [gifUrl, setGifUrl]           = useState<string|null>(null)
   const [gifLoading, setGifLoading]   = useState(false)
   const [gifProgress, setGifProgress] = useState(0)
   const [gifError, setGifError]       = useState<string|null>(null)
+  const [gifFrame, setGifFrame]       = useState(0)
   const gifGenRef                     = useRef(false)
 
   const clientName = session.clients?.name ?? 'Photobooth'
@@ -93,15 +143,34 @@ export default function DownloadPage({
   const cellH = (frameHeight - layout.topPadding  - layout.bottomPadding - (rows-1)*layout.verticalSpacing)   / rows
 
   // Scale down untuk preview di layar
-  const MAX_PREVIEW_W = 300
+  const MAX_PREVIEW_W = 320
   const previewScale  = Math.min(1, MAX_PREVIEW_W / frameWidth)
   const previewW      = frameWidth  * previewScale
+  const previewH      = frameHeight * previewScale
 
-  // Ada yang masih dikerjakan mesin?
-  const stillWorking =
-    media.gif_status === 'processing' || media.gif_status === 'pending' ||
-    media.video_status === 'processing' || media.video_status === 'pending' ||
-    !media.result_url
+  // GIF dari server (dirakit di mesin) selalu diutamakan: jauh lebih cepat
+  // daripada merakit ulang di HP pelanggan, dan hasilnya konsisten.
+  const serverGifUrl    = media.gif_status === 'ready' ? media.gif_url : null
+  const effectiveGifUrl = serverGifUrl ?? gifUrl
+
+  // Media yang memang diharapkan muncul untuk sesi ini. Status 'failed'
+  // dihitung sebagai selesai — bukan sesuatu yang masih perlu ditunggu.
+  // Sebelumnya sesi lama yang gagal menampilkan spinner "sedang dirender"
+  // selamanya karena tidak pernah ada yang menghentikannya.
+  const gifExpected   = photoCount > 1 && media.gif_status != null && media.gif_status !== 'failed'
+  const videoExpected = media.video_status != null && media.video_status !== 'failed'
+
+  const steps = [
+    { key:'photos', label:'Foto',        done: photoCount > 0,                 show: true },
+    { key:'strip',  label:'Photo strip', done: !!media.result_url,             show: true },
+    { key:'gif',    label:'GIF animasi', done: media.gif_status === 'ready',   show: gifExpected },
+    { key:'video',  label:'Video',       done: media.video_status === 'ready', show: videoExpected },
+  ].filter(s => s.show)
+
+  const doneCount    = steps.filter(s => s.done).length
+  const allDone      = doneCount === steps.length
+  const currentStep  = steps.find(s => !s.done)
+  const stillWorking = !allDone
 
   // Polling status selama mesin masih bekerja.
   useEffect(() => {
@@ -133,40 +202,66 @@ export default function DownloadPage({
     return () => { cancelled = true; clearInterval(iv) }
   }, [stillWorking, uuid])
 
-  // GIF dari server (dirakit di mesin) selalu diutamakan: jauh lebih cepat
-  // daripada merakit ulang di HP pelanggan, dan hasilnya konsisten.
-  const serverGifUrl = media.gif_status === 'ready' ? media.gif_url : null
-  const effectiveGifUrl = serverGifUrl ?? gifUrl
+  // ── Angka pada cincin ──────────────────────────────────────────────────
+  const [now, setNow] = useState(0)
+  const stepSinceRef  = useRef(0)
+  const openedAtRef   = useRef(0)
 
-  // GIF slideshow interval
+  // Jam baru berjalan setelah komponen terpasang di browser, supaya render
+  // di server dan render pertama di klien menghasilkan HTML yang sama.
   useEffect(() => {
-    if (activeTab !== 'gif' || photos.length === 0) return
+    const t = Date.now()
+    stepSinceRef.current = t
+    openedAtRef.current  = t
+    setNow(t)
+  }, [])
+
+  useEffect(() => { stepSinceRef.current = Date.now() }, [doneCount])
+
+  useEffect(() => {
+    if (!stillWorking) return
+    const iv = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(iv)
+  }, [stillWorking])
+
+  const total    = Math.max(steps.length, 1)
+  const floorPct = (doneCount / total) * 100
+  const slicePct = (1 / total) * 100
+  const inStepMs = stepSinceRef.current ? Math.max(0, now - stepSinceRef.current) : 0
+  const creep    = slicePct * (1 - Math.exp(-inStepMs / STEP_TAU_MS))
+  const percent  = allDone ? 100 : Math.min(CREEP_CEILING, Math.round(floorPct + creep))
+
+  const takingLong =
+    stillWorking && openedAtRef.current > 0 && (now - openedAtRef.current) > SLOW_AFTER_MS
+
+  // Pratinjau slideshow kecil selama GIF belum ada.
+  useEffect(() => {
+    if (effectiveGifUrl || photos.length < 2) return
     const iv = setInterval(() => setGifFrame(f => (f+1) % photos.length), 700)
     return () => clearInterval(iv)
-  }, [activeTab, photos.length])
+  }, [effectiveGifUrl, photos.length])
 
   // Rakit GIF di browser HANYA sebagai cadangan — kalau mesin gagal membuatnya
-  // atau sesi ini dari versi lama yang belum mengunggah GIF.
-  useEffect(() => {
-    if (activeTab !== 'gif') return
-    if (serverGifUrl) return
-    if (media.gif_status === 'processing' || media.gif_status === 'pending') return
-    if (gifUrl || gifLoading || gifGenRef.current || photos.length < 2) return
-    gifGenRef.current = true
-    generateGif()
-  }, [activeTab, serverGifUrl, media.gif_status])
+  // atau sesi ini dari versi lama yang belum mengunggah GIF. Dulu jalan
+  // otomatis begitu tab GIF dibuka; sekarang pelanggan yang memutuskan,
+  // supaya HP kentang tidak dipaksa bekerja tanpa diminta.
+  const loadScript = (src:string) => new Promise<void>((res,rej)=>{
+    if (document.querySelector(`script[src="${src}"]`)) { res(); return }
+    const s = document.createElement('script'); s.src = src; s.onload = () => res(); s.onerror = rej
+    document.head.appendChild(s)
+  })
 
   const generateGif = async () => {
+    if (gifGenRef.current) return
+    gifGenRef.current = true
     setGifLoading(true); setGifProgress(0); setGifError(null)
     try {
-      // Load gif.js library
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js')
       const GIF = (window as any).GIF
 
-      // ✅ FIX: Fetch worker → Blob URL
       // Browser memblokir Web Worker dari external URL meski CORS OK.
-      // Solusi: fetch dulu script-nya, buat Blob URL, gunakan sebagai workerScript.
-      const workerRes  = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js')
+      // Solusi: fetch dulu script-nya, buat Blob URL, pakai sebagai workerScript.
+      const workerRes = await fetch('https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js')
       if (!workerRes.ok) throw new Error(`Worker fetch failed: ${workerRes.status}`)
       const workerBlob = await workerRes.blob()
       const workerUrl  = URL.createObjectURL(workerBlob)
@@ -174,7 +269,6 @@ export default function DownloadPage({
       const size = 400
       const gif  = new GIF({ workers:2, quality:8, width:size, height:size, workerScript: workerUrl })
 
-      // Load semua foto
       let loaded = 0
       const images: HTMLImageElement[] = []
       for (const p of photos) {
@@ -182,7 +276,7 @@ export default function DownloadPage({
           const im = new Image(); im.crossOrigin = 'anonymous'
           im.onload  = () => { images.push(im); loaded++; setGifProgress(Math.round((loaded/photos.length)*60)); res() }
           im.onerror = () => {
-            // ✅ FIX: Retry tanpa crossOrigin sebagai fallback (Supabase CORS edge case)
+            // Ulangi tanpa crossOrigin sebagai cadangan (kasus CORS pinggiran)
             const im2 = new Image()
             im2.onload  = () => { images.push(im2); loaded++; setGifProgress(Math.round((loaded/photos.length)*60)); res() }
             im2.onerror = () => { loaded++; res() }
@@ -193,21 +287,20 @@ export default function DownloadPage({
       }
 
       if (images.length === 0) {
-        setGifError('Gagal memuat foto. Coba lagi.')
+        setGifError('Gagal memuat foto')
         setGifLoading(false)
         gifGenRef.current = false
         URL.revokeObjectURL(workerUrl)
         return
       }
 
-      // Render setiap foto ke canvas → tambah ke GIF
       const canvas = document.createElement('canvas')
       canvas.width = size; canvas.height = size
       const ctx = canvas.getContext('2d')!
       for (const im of images) {
         ctx.clearRect(0,0,size,size)
         const r = im.naturalWidth/im.naturalHeight
-        let sx=0,sy=0,sw=im.naturalWidth,sh=im.naturalHeight
+        let sx=0, sy=0, sw=im.naturalWidth, sh=im.naturalHeight
         if (r>1) { sw=sh; sx=(im.naturalWidth-sw)/2 } else { sh=sw; sy=0 }
         ctx.drawImage(im,sx,sy,sw,sh,0,0,size,size)
         gif.addFrame(canvas,{delay:800,copy:true})
@@ -215,7 +308,7 @@ export default function DownloadPage({
 
       gif.on('progress',(p:number)=>setGifProgress(60+Math.round(p*40)))
       gif.on('finished',(blob:Blob)=>{
-        URL.revokeObjectURL(workerUrl) // cleanup blob URL
+        URL.revokeObjectURL(workerUrl)
         setGifUrl(URL.createObjectURL(blob))
         setGifLoading(false)
         setGifProgress(100)
@@ -224,433 +317,385 @@ export default function DownloadPage({
 
     } catch(e) {
       console.error('GIF error:', e)
-      setGifError('Gagal membuat GIF. Coba klik tombol di bawah untuk retry.')
+      setGifError('Gagal membuat GIF')
       setGifLoading(false)
-      gifGenRef.current = false // allow retry
+      gifGenRef.current = false
     }
   }
 
-  const retryGif = () => {
-    setGifError(null)
-    setGifProgress(0)
-    gifGenRef.current = false
-    generateGif()
-  }
-
-  const loadScript = (src:string) => new Promise<void>((res,rej)=>{
-    if (document.querySelector(`script[src="${src}"]`)) { res(); return }
-    const s=document.createElement('script'); s.src=src; s.onload=()=>res(); s.onerror=rej
-    document.head.appendChild(s)
-  })
-
-  const handleDownload = async (url:string, filename:string) => {
-    setDownloading(filename)
+  const handleDownload = async (url:string, filename:string, key:string) => {
+    setDownloading(key)
     try {
-      const res = await fetch(url); const blob = await res.blob()
-      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click()
+      const res  = await fetch(url)
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob); a.download = filename; a.click()
       URL.revokeObjectURL(a.href)
     } catch(e) { console.error(e) }
-    setTimeout(()=>setDownloading(null),1500)
+    setTimeout(()=>setDownloading(null), 1200)
   }
 
-  const formatDate = (d:string) => new Date(d).toLocaleString('id-ID',{dateStyle:'long',timeStyle:'short'})
-
-  // Render strip dengan layout pixel-perfect sama Flutter
-  const StripPreview = ({ scale=1, frameUrl }: { scale?:number; frameUrl:string|null }) => {
-    const W = frameWidth  * scale
-    const H = frameHeight * scale
-    const cW = cellW * scale
-    const cH = cellH * scale
-    const lTop   = layout.topPadding        * scale
-    const lLeft  = layout.leftPadding       * scale
-    const lHSp   = layout.horizontalSpacing * scale
-    const lVSp   = layout.verticalSpacing   * scale
-    return (
-      <div style={{position:'relative',width:W,height:H,background:'#150C09',flexShrink:0,overflow:'hidden'}}>
-        {photos.slice(0,photoCount).map((p,i)=>{
-          const col = i % cols
-          const row = Math.floor(i / cols)
-          const x = lLeft + col*(cW+lHSp)
-          const y = lTop  + row*(cH+lVSp)
-          return (
-            <div key={i} style={{position:'absolute',left:x,top:y,width:cW,height:cH,overflow:'hidden'}}>
-              <img src={p.photo_url} alt="" crossOrigin="anonymous"
-                style={{width:'100%',height:'100%',objectFit:'cover',objectPosition:'center top',display:'block'}}/>
-            </div>
-          )
-        })}
-        {frameUrl && (
-          <img src={frameUrl} alt="frame" crossOrigin="anonymous"
-            style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'fill',pointerEvents:'none'}}/>
-        )}
-      </div>
-    )
+  const downloadAllPhotos = async () => {
+    setDownloading('all-photos')
+    for (let i = 0; i < photos.length; i++) {
+      try {
+        const res  = await fetch(photos[i].photo_url)
+        const blob = await res.blob()
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `foto_${i+1}_${uuid.slice(0,8)}.jpg`
+        a.click()
+        URL.revokeObjectURL(a.href)
+      } catch(e) { console.error(e) }
+      await new Promise(r => setTimeout(r, 350))
+    }
+    setDownloading(null)
   }
+
+  const formatDate = (d:string) =>
+    new Date(d).toLocaleString('id-ID', { dateStyle:'long', timeStyle:'short' })
+
+  const busy = (key:string) => downloading === key
+
+  // Strip dirakit ulang di browser dengan layout pixel-perfect sama Flutter —
+  // dipakai hanya selama strip final belum diunggah mesin.
+  const StripPreview = () => (
+    <div style={{ position:'relative', width:frameWidth, height:frameHeight, background:'#150C09', overflow:'hidden' }}>
+      {photos.slice(0,photoCount).map((p,i)=>{
+        const col = i % cols
+        const row = Math.floor(i / cols)
+        const x = layout.leftPadding + col*(cellW+layout.horizontalSpacing)
+        const y = layout.topPadding  + row*(cellH+layout.verticalSpacing)
+        return (
+          <div key={i} style={{ position:'absolute', left:x, top:y, width:cellW, height:cellH, overflow:'hidden' }}>
+            <img src={p.photo_url} alt="" crossOrigin="anonymous"
+              style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top', display:'block' }}/>
+          </div>
+        )
+      })}
+    </div>
+  )
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        html{scroll-behavior:smooth}
-        body{font-family:'Poppins',sans-serif;background:#FAF7F5;overflow-x:hidden}
-        @keyframes float-1{0%,100%{transform:translate(0,0)}50%{transform:translate(25px,-20px)}}
-        @keyframes float-2{0%,100%{transform:translate(0,0)}50%{transform:translate(-20px,25px)}}
-        @keyframes fade-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes fade-in{from{opacity:0}to{opacity:1}}
+        body{font-family:'Poppins',sans-serif;background:#FAF7F5;color:#150C09;overflow-x:hidden}
         @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes gif-glow{0%,100%{opacity:1}50%{opacity:.6}}
-        .fu1{animation:fade-up .5s ease .05s both}
-        .fu2{animation:fade-up .5s ease .15s both}
-        .fu3{animation:fade-up .5s ease .25s both}
-        .fu4{animation:fade-up .5s ease .35s both}
-        .glass{background:rgba(212,43,34,0.05);backdrop-filter:blur(24px) saturate(180%);border:1px solid rgba(212,43,34,0.07)}
-        .photo-card{transition:transform .2s cubic-bezier(.34,1.56,.64,1),box-shadow .2s;cursor:pointer}
-        .photo-card:hover{transform:scale(1.03) translateY(-3px);box-shadow:0 16px 40px rgba(0,0,0,.6)!important}
-        .tab-btn{padding:8px 18px;border-radius:10px;border:1px solid rgba(212,43,34,0.07);background:transparent;color:rgba(122,98,89,0.88);font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:'Poppins',sans-serif;display:flex;align-items:center;gap:6px;white-space:nowrap}
-        .tab-btn.active{background:rgba(212,43,34,.2);border-color:rgba(212,43,34,.5);color:#E83530}
-        .tab-btn:hover:not(.active){background:rgba(212,43,34,0.05);color:rgba(21,12,9,0.8)}
-        .dl-btn{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 20px;border-radius:12px;border:none;font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;font-family:'Poppins',sans-serif;width:100%}
-        .dl-btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.1)}
-        .dl-btn:disabled{opacity:.5;cursor:not-allowed}
-        .lb{animation:fade-in .15s ease both}
-        ::-webkit-scrollbar{width:4px;height:4px}
-        ::-webkit-scrollbar-thumb{background:rgba(212,43,34,0.08);border-radius:2px}
-        @media(max-width:900px){.main-grid{grid-template-columns:minmax(0,1fr) !important}.right-panel{order:-1}}
-        /* Halaman ini paling sering dibuka dari HP: rapatkan paddingnya. */
-        @media(max-width:520px){
-          .dl-wrap{padding:24px 14px 64px !important}
-          .dl-btn{padding:12px 14px}
+        @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes soft-in{from{opacity:0}to{opacity:1}}
+        .rise{animation:rise .5s ease both}
+        .rise-2{animation:rise .5s ease .08s both}
+        .rise-3{animation:rise .5s ease .16s both}
+        @media (prefers-reduced-motion: reduce){ .rise,.rise-2,.rise-3{animation:none} }
+
+        .wrap{max-width:560px;margin:0 auto;padding:40px 20px 72px}
+        @media (max-width:520px){ .wrap{padding:28px 16px 56px} }
+
+        /* Kartu: satu garis tipis, tanpa bayangan berat. */
+        .card{background:#fff;border:1px solid rgba(212,43,34,0.10);border-radius:18px}
+
+        .btn{
+          display:flex;align-items:center;justify-content:center;gap:9px;
+          width:100%;padding:14px 18px;border-radius:14px;border:1px solid transparent;
+          font-family:'Poppins',sans-serif;font-size:14px;font-weight:600;cursor:pointer;
+          transition:filter .2s,transform .12s,background .2s;
         }
+        .btn:active:not(:disabled){transform:translateY(1px)}
+        .btn:disabled{opacity:.55;cursor:default}
+        .btn-primary{background:linear-gradient(135deg,#E83530,#C02018);color:#fff;box-shadow:0 6px 18px rgba(212,43,34,.24)}
+        .btn-primary:hover:not(:disabled){filter:brightness(1.06)}
+        .btn-ghost{background:#fff;border-color:rgba(212,43,34,0.18);color:#C02018}
+        .btn-ghost:hover:not(:disabled){background:rgba(212,43,34,0.045)}
+        .btn:focus-visible,.row-btn:focus-visible,.thumb-dl:focus-visible{outline:2px solid #D42B22;outline-offset:2px}
+
+        .row{display:flex;align-items:center;gap:14px;padding:14px 16px}
+        .row-icon{
+          width:38px;height:38px;border-radius:11px;flex-shrink:0;overflow:hidden;
+          display:flex;align-items:center;justify-content:center;
+          background:rgba(212,43,34,0.07);color:#D42B22;
+        }
+        .row-btn{
+          flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:7px;
+          padding:10px 14px;border-radius:11px;cursor:pointer;border:none;
+          background:linear-gradient(135deg,#E83530,#C02018);color:#fff;
+          font-family:'Poppins',sans-serif;font-size:12.5px;font-weight:600;
+        }
+        .row-btn:disabled{opacity:.6;cursor:default}
+        .row-btn.ghost{background:#fff;border:1px solid rgba(212,43,34,0.2);color:#C02018}
+
+        .photo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+        @media (max-width:420px){ .photo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px} }
+        .thumb{
+          position:relative;border-radius:12px;overflow:hidden;cursor:zoom-in;
+          border:1px solid rgba(212,43,34,0.10);background:#fff;
+        }
+        .thumb img{width:100%;aspect-ratio:1;object-fit:cover;object-position:center top;display:block}
+        .thumb-dl{
+          position:absolute;right:6px;bottom:6px;
+          width:28px;height:28px;border-radius:9px;border:none;cursor:pointer;
+          display:flex;align-items:center;justify-content:center;
+          background:rgba(21,12,9,.62);color:#fff;backdrop-filter:blur(4px);
+        }
+
+        .lb{animation:soft-in .15s ease both}
+        ::-webkit-scrollbar{width:5px;height:5px}
+        ::-webkit-scrollbar-thumb{background:rgba(212,43,34,0.18);border-radius:3px}
       `}</style>
 
-      <div style={{minHeight:'100dvh',position:'relative',overflow:'hidden',background:'linear-gradient(135deg,#FAF7F5 0%,#FAF7F5 50%,#FAF7F5 100%)'}}>
-        <div style={{position:'fixed',width:600,height:600,top:-150,left:-150,borderRadius:'50%',filter:'blur(80px)',pointerEvents:'none',zIndex:0,background:'radial-gradient(circle,rgba(212,43,34,.15) 0%,transparent 70%)',animation:'float-1 18s ease-in-out infinite'}}/>
-        <div style={{position:'fixed',width:500,height:500,bottom:-100,right:-100,borderRadius:'50%',filter:'blur(80px)',pointerEvents:'none',zIndex:0,background:'radial-gradient(circle,rgba(212,43,34,.12) 0%,transparent 70%)',animation:'float-2 22s ease-in-out infinite'}}/>
-        <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0,backgroundImage:'linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px)',backgroundSize:'56px 56px'}}/>
+      <div style={{ minHeight:'100dvh', background:'#FAF7F5' }}>
+        <div className="wrap">
 
-        <div className="dl-wrap" style={{position:'relative',zIndex:10,maxWidth:1000,margin:'0 auto',padding:'36px 20px 80px'}}>
-
-          {/* Header */}
-          <div className="fu1" style={{textAlign:'center',marginBottom:32}}>
-            <div style={{display:'inline-flex',alignItems:'center',gap:8,marginBottom:16,background:'rgba(212,43,34,.1)',border:'1px solid rgba(212,43,34,.25)',borderRadius:100,padding:'7px 16px'}}>
-              <Camera size={14} color="#E83530"/>
-              <span style={{color:'#E83530',fontSize:12,fontWeight:600}}>{clientName}</span>
-            </div>
-            <h1 style={{color:'#150C09',fontSize:'clamp(24px,5vw,44px)',fontWeight:800,fontFamily:'Poppins,sans-serif',lineHeight:1.2,marginBottom:10}}>
-              Foto kamu sudah siap! 🎉
+          {/* ── HEADER ── */}
+          <header className="rise" style={{ textAlign:'center', marginBottom:32 }}>
+            <img
+              src="/logo-pk.webp"
+              alt="Pabrik Kenangan"
+              width={196} height={110}
+              style={{ width:168, height:'auto', margin:'0 auto 20px', display:'block' }}
+            />
+            <h1 style={{ fontSize:'clamp(22px,5.2vw,30px)', fontWeight:800, letterSpacing:'-0.02em', lineHeight:1.25, marginBottom:8 }}>
+              {allDone ? 'Foto kamu sudah siap' : 'Sedang menyiapkan hasil'}
             </h1>
-            <p style={{color:'rgba(122,98,89,0.95)',fontSize:14,maxWidth:480,margin:'0 auto'}}>
-              Scan QR Code atau buka link ini untuk download hasil fotomu
+            <p style={{ fontSize:13.5, color:'#9E8880' }}>
+              {formatDate(session.created_at)} · {clientName}
             </p>
-          </div>
+          </header>
 
-          {/* Session info */}
-          <div className="fu2 glass" style={{borderRadius:14,padding:'12px 20px',marginBottom:24,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
-            <div style={{display:'flex',alignItems:'center',gap:7}}>
-              <CheckCircle2 size={15} color="#059669"/>
-              <span style={{color:'#059669',fontSize:13,fontWeight:600}}>
-                {session.payment_status==='paid'?'Pembayaran Sukses':session.payment_status==='free'?'Sesi Gratis':'Sesi Demo'}
-              </span>
-            </div>
-            <div style={{width:1,height:14,background:'rgba(212,43,34,0.08)'}}/>
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <Clock size={13} color="rgba(122,98,89,0.8)"/>
-              <span style={{color:'rgba(122,98,89,0.8)',fontSize:12}}>{formatDate(session.created_at)}</span>
-            </div>
-            <code style={{marginLeft:'auto',color:'#B0A09A',fontSize:10,fontFamily:'monospace'}}>{uuid.slice(0,24)}...</code>
-          </div>
+          {/* ── PROGRES ── */}
+          {stillWorking && (
+            <div className="card rise-2" style={{ padding:'28px 20px' }}>
+              <ProgressRing
+                percent={percent}
+                caption={
+                  takingLong
+                    ? 'Agak lebih lama dari biasanya'
+                    : currentStep
+                      ? `Menyiapkan ${currentStep.label.toLowerCase()}…`
+                      : 'Menyiapkan hasil…'
+                }
+                hint={
+                  takingLong
+                    ? 'Halaman ini memperbarui dirinya sendiri — tidak perlu di-refresh. Yang sudah jadi tetap bisa diunduh di bawah.'
+                    : 'Biasanya sekitar 30 detik. Halaman ini memperbarui dirinya sendiri.'
+                }
+              />
 
-          {/* Main grid */}
-          <div className="main-grid" style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 300px',gap:20,alignItems:'start'}}>
-
-            {/* LEFT */}
-            <div>
-              <div className="fu3" style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
-                <button className={`tab-btn ${activeTab==='strip'?'active':''}`} onClick={()=>setActiveTab('strip')}><Sparkles size={13}/>Strip</button>
-                {photos.length>0&&<button className={`tab-btn ${activeTab==='photos'?'active':''}`} onClick={()=>setActiveTab('photos')}><Images size={13}/>{photos.length} Foto</button>}
-                {photos.length>1&&<button className={`tab-btn ${activeTab==='gif'?'active':''}`} onClick={()=>setActiveTab('gif')}>
-                  <span style={{fontSize:11,fontWeight:700,background:'linear-gradient(135deg,#E83530,#E83530)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>GIF</span>&nbsp;Animasi
-                  {(media.gif_status==='processing'||media.gif_status==='pending')&&
-                    <Loader2 size={11} style={{animation:'spin .8s linear infinite',marginLeft:4}}/>}
-                </button>}
-                {(media.video_url||media.video_status==='processing'||media.video_status==='pending')&&
-                  <button className={`tab-btn ${activeTab==='video'?'active':''}`} onClick={()=>setActiveTab('video')}>
-                    <Film size={13}/>Video
-                    {(media.video_status==='processing'||media.video_status==='pending')&&
-                      <Loader2 size={11} style={{animation:'spin .8s linear infinite',marginLeft:4}}/>}
-                  </button>}
+              {/* Langkah nyata — inilah yang mengunci angka di cincin. */}
+              <div style={{
+                display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'8px 16px',
+                marginTop:22, paddingTop:18, borderTop:'1px solid rgba(212,43,34,0.08)',
+              }}>
+                {steps.map(s => (
+                  <span key={s.key} style={{
+                    display:'inline-flex', alignItems:'center', gap:6,
+                    fontSize:12, fontWeight: s.done ? 600 : 500,
+                    color: s.done ? '#1E7A4B' : '#B0A09A',
+                  }}>
+                    {s.done
+                      ? <Check size={13} strokeWidth={3}/>
+                      : s === currentStep
+                        ? <Loader2 size={13} style={{ animation:'spin .9s linear infinite' }}/>
+                        : <span style={{ width:7, height:7, borderRadius:'50%', background:'currentColor', opacity:.45 }}/>}
+                    {s.label}
+                  </span>
+                ))}
               </div>
+            </div>
+          )}
 
-              {/* Panel transparansi: apa yang sudah siap, apa yang masih dibuat */}
-              {stillWorking&&(
-                <div className="fu3" style={{marginBottom:16,padding:'12px 14px',borderRadius:12,background:'rgba(212,43,34,0.045)',border:'1px solid rgba(212,43,34,0.1)'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:8}}>
-                    <Loader2 size={13} color="#E83530" style={{animation:'spin .9s linear infinite'}}/>
-                    <span style={{fontSize:12.5,fontWeight:600,color:'#150C09'}}>Sebagian hasil masih dibuat di mesin</span>
+          {/* ── PHOTO STRIP ── */}
+          <Section title="Photo strip" meta={media.result_url ? 'hasil final dengan frame' : 'pratinjau sementara'}>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
+              {media.result_url ? (
+                <button
+                  onClick={()=>setLightbox(media.result_url!)}
+                  style={{
+                    padding:0, border:'1px solid rgba(212,43,34,0.10)', borderRadius:16,
+                    overflow:'hidden', cursor:'zoom-in', background:'#fff',
+                    maxWidth:previewW, width:'100%', display:'block',
+                  }}>
+                  <img src={media.result_url} alt="Photo strip" style={{ width:'100%', display:'block' }}/>
+                </button>
+              ) : photos.length > 0 ? (
+                <div style={{
+                  width:previewW, height:previewH, overflow:'hidden',
+                  border:'1px solid rgba(212,43,34,0.10)', borderRadius:16,
+                }}>
+                  <div style={{ transform:`scale(${previewScale})`, transformOrigin:'top left' }}>
+                    <StripPreview/>
                   </div>
-                  <div style={{display:'flex',flexDirection:'column',gap:5}}>
-                    <ProgressRow label={`${photos.length} foto`} state={photos.length>0?'ready':'processing'}/>
-                    <ProgressRow label="Photo strip" state={media.result_url?'ready':'processing'}/>
-                    <ProgressRow label="GIF animasi" state={media.gif_status ?? 'pending'}/>
-                    <ProgressRow label="Video" state={media.video_status ?? 'pending'}/>
-                  </div>
-                  <p style={{margin:'9px 0 0',fontSize:11,color:'rgba(74,46,34,0.72)',lineHeight:1.5}}>
-                    Halaman ini memperbarui dirinya sendiri — tidak perlu di-refresh.
-                    Video biasanya paling lama karena dirender ulang bersama frame.
-                  </p>
+                </div>
+              ) : (
+                <div className="card" style={{ padding:'44px 20px', textAlign:'center', width:'100%' }}>
+                  <Loader2 size={22} color="#D42B22" style={{ animation:'spin .9s linear infinite' }}/>
+                  <p style={{ marginTop:10, fontSize:13, color:'#9E8880' }}>Foto belum masuk</p>
                 </div>
               )}
 
-              <div className="fu4">
-                {/* TAB STRIP */}
-                {activeTab==='strip'&&(
-                  <div style={{display:'flex',justifyContent:'center'}}>
-                    {media.result_url ? (
-                      <div className="photo-card" onClick={()=>setLightbox(media.result_url!)}
-                        style={{borderRadius:14,overflow:'hidden',boxShadow:'0 8px 32px rgba(0,0,0,.5)',border:'1px solid rgba(212,43,34,0.06)',maxWidth:previewW,width:'100%'}}>
-                        <img src={media.result_url} alt="Photo strip" style={{width:'100%',display:'block'}}/>
-                      </div>
-                    ) : photos.length>0 ? (
-                      <div className="photo-card" style={{borderRadius:14,overflow:'hidden',boxShadow:'0 8px 32px rgba(0,0,0,.5)',border:'1px solid rgba(212,43,34,0.06)'}}>
-                        <div style={{transform:`scale(${previewScale})`,transformOrigin:'top left',width:frameWidth,height:frameHeight}}>
-                          <StripPreview frameUrl={null}/>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="glass" style={{borderRadius:14,padding:'60px 40px',textAlign:'center',width:'100%'}}>
-                        <div style={{width:44,height:44,borderRadius:'50%',border:'3px solid rgba(212,43,34,.4)',borderTopColor:'#D42B22',animation:'spin 1s linear infinite',margin:'0 auto 14px'}}/>
-                        <p style={{color:'rgba(122,98,89,0.8)',fontSize:14}}>Memproses foto...</p>
-                      </div>
-                    )}
+              <button
+                className="btn btn-primary"
+                disabled={!media.result_url || busy('strip')}
+                onClick={()=>handleDownload(media.result_url!, `photobooth_strip_${uuid.slice(0,8)}.png`, 'strip')}
+                style={{ maxWidth:previewW }}>
+                {busy('strip')
+                  ? <><Loader2 size={16} style={{ animation:'spin .8s linear infinite' }}/>Mengunduh…</>
+                  : media.result_url
+                    ? <><Download size={16}/>Download strip</>
+                    : <><Loader2 size={16} style={{ animation:'spin .9s linear infinite' }}/>Menunggu strip</>}
+              </button>
+            </div>
+          </Section>
+
+          {/* ── FOTO ASLI ── */}
+          {photos.length > 0 && (
+            <Section title="Foto asli" meta={`${photos.length} foto tanpa frame`}>
+              <div className="photo-grid">
+                {photos.map((p,i)=>(
+                  <div key={i} className="thumb" onClick={()=>setLightbox(p.photo_url)}>
+                    <img src={p.photo_url} alt={`Foto ${i+1}`}/>
+                    <button
+                      className="thumb-dl"
+                      aria-label={`Simpan foto ${i+1}`}
+                      onClick={e=>{ e.stopPropagation(); handleDownload(p.photo_url, `foto_${i+1}_${uuid.slice(0,8)}.jpg`, `photo_${i}`) }}>
+                      {busy(`photo_${i}`)
+                        ? <Loader2 size={13} style={{ animation:'spin .8s linear infinite' }}/>
+                        : <Download size={13}/>}
+                    </button>
                   </div>
-                )}
+                ))}
+              </div>
+              <button
+                className="btn btn-ghost"
+                style={{ marginTop:12 }}
+                disabled={busy('all-photos')}
+                onClick={downloadAllPhotos}>
+                {busy('all-photos')
+                  ? <><Loader2 size={15} style={{ animation:'spin .8s linear infinite' }}/>Mengunduh {photos.length} foto…</>
+                  : <><Download size={15}/>Download semua foto</>}
+              </button>
+            </Section>
+          )}
 
-                {/* TAB PHOTOS */}
-                {activeTab==='photos'&&photos.length>0&&(
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
-                    {photos.map((p,i)=>(
-                      <div key={i} className="photo-card" onClick={()=>setLightbox(p.photo_url)}
-                        style={{borderRadius:10,overflow:'hidden',boxShadow:'0 4px 16px rgba(0,0,0,.4)',border:'1px solid rgba(212,43,34,0.055)',position:'relative'}}>
-                        <img src={p.photo_url} alt={`Foto ${i+1}`} style={{width:'100%',aspectRatio:'1',objectFit:'cover',objectPosition:'center top',display:'block'}}/>
-                        <div style={{position:'absolute',top:7,left:7,background:'rgba(0,0,0,.65)',borderRadius:5,padding:'2px 7px',color:'#fff',fontSize:11,fontWeight:700}}>{i+1}</div>
-                        <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'18px 8px 8px',background:'linear-gradient(to top,rgba(0,0,0,.75),transparent)',display:'flex',justifyContent:'center'}}>
-                          <button onClick={e=>{e.stopPropagation();handleDownload(p.photo_url,`foto_${i+1}_${uuid.slice(0,8)}.jpg`)}}
-                            style={{background:'rgba(212,43,34,0.10)',border:'1px solid rgba(158,136,128,0.85)',borderRadius:7,padding:'4px 10px',color:'#150C09',fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:4,fontFamily:"'Poppins',sans-serif"}}>
-                            <Download size={10}/>Simpan
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+          {/* ── GIF & VIDEO ── */}
+          {(photoCount > 1 || media.video_status != null) && (
+            <Section title="Lainnya">
+              <div className="card" style={{ overflow:'hidden' }}>
 
-                {/* TAB GIF */}
-                {/* TAB VIDEO */}
-                {activeTab==='video'&&(
-                  <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:16}}>
-                    {media.video_url ? (
-                      <>
-                        <video src={media.video_url} controls playsInline preload="metadata"
-                          style={{width:'100%',maxWidth:previewW,borderRadius:14,border:'1px solid rgba(212,43,34,0.08)',boxShadow:'0 8px 32px rgba(0,0,0,.25)',display:'block'}}/>
-                        <button className="dl-btn" onClick={()=>handleDownload(media.video_url!,`photobooth_video_${uuid.slice(0,8)}.mp4`)}
-                          style={{background:'linear-gradient(135deg,#E83530,#C02018)',color:'#fff',maxWidth:260,boxShadow:'0 4px 20px rgba(212,43,34,.3)'}}>
-                          <Download size={15}/>Download Video
-                        </button>
-                      </>
-                    ) : (
-                      <div style={{textAlign:'center',padding:'26px 16px',maxWidth:320}}>
-                        <Loader2 size={26} color="#E83530" style={{animation:'spin .9s linear infinite'}}/>
-                        <p style={{margin:'12px 0 4px',fontSize:13.5,fontWeight:600,color:'#150C09'}}>Video sedang dirender</p>
-                        <p style={{margin:0,fontSize:12,color:'rgba(74,46,34,0.75)',lineHeight:1.55}}>
-                          Setiap klip dipasang ke frame lalu digabung jadi satu video.
-                          Prosesnya berjalan di mesin photobooth dan muncul di sini begitu selesai.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab==='gif'&&photos.length>0&&(
-                  <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:20}}>
-                    {/* GIF sedang dirakit di mesin — jangan bebani HP pelanggan */}
-                    {!serverGifUrl&&(media.gif_status==='processing'||media.gif_status==='pending')&&(
-                      <div style={{textAlign:'center',padding:'8px 16px',maxWidth:320}}>
-                        <p style={{margin:'0 0 4px',fontSize:13.5,fontWeight:600,color:'#150C09'}}>GIF sedang dibuat di mesin</p>
-                        <p style={{margin:0,fontSize:12,color:'rgba(74,46,34,0.75)',lineHeight:1.55}}>
-                          Dibuat sekali di sana supaya HP kamu tidak perlu memprosesnya sendiri.
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Slideshow preview */}
-                    <div style={{position:'relative'}}>
-                      <div style={{position:'absolute',inset:-10,borderRadius:18,background:'linear-gradient(135deg,rgba(212,43,34,.25),rgba(212,43,34,.25))',filter:'blur(16px)',animation:'gif-glow .8s ease infinite'}}/>
-                      <div style={{position:'relative',borderRadius:14,overflow:'hidden',border:'1px solid rgba(212,43,34,0.08)',width:260}}>
-                        <img src={photos[gifFrame]?.photo_url} alt="GIF preview"
-                          style={{width:'100%',aspectRatio:'1',objectFit:'cover',objectPosition:'center top',display:'block'}}/>
-                        <div style={{position:'absolute',top:8,right:8,background:'rgba(0,0,0,.75)',borderRadius:5,padding:'2px 8px',color:'#E83530',fontSize:10,fontWeight:700}}>
-                          PREVIEW {gifFrame+1}/{photos.length}
-                        </div>
-                      </div>
+                {/* GIF */}
+                {photoCount > 1 && (
+                  <div className="row">
+                    <div className="row-icon">
+                      {effectiveGifUrl
+                        ? <img src={effectiveGifUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+                        : photos[gifFrame]
+                          ? <img src={photos[gifFrame].photo_url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+                          : <Sparkles size={17}/>}
                     </div>
-
-                    {/* Loading progress */}
-                    {gifLoading&&(
-                      <div style={{width:'100%',maxWidth:300}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                          <Loader2 size={14} color="#E83530" style={{animation:'spin .8s linear infinite'}}/>
-                          <span style={{color:'rgba(74,46,34,0.9)',fontSize:12}}>Membuat GIF... {gifProgress}%</span>
-                        </div>
-                        <div style={{height:4,background:'rgba(212,43,34,0.07)',borderRadius:2,overflow:'hidden'}}>
-                          <div style={{height:'100%',width:`${gifProgress}%`,background:'linear-gradient(90deg,#D42B22,#D42B22)',borderRadius:2,transition:'width .3s'}}/>
-                        </div>
-                      </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <p style={{ fontSize:13.5, fontWeight:600, marginBottom:2 }}>GIF animasi</p>
+                      <p style={{ fontSize:11.5, color:'#9E8880' }}>
+                        {effectiveGifUrl
+                          ? (serverGifUrl ? 'Dibuat di mesin photobooth' : 'Dibuat di HP kamu')
+                          : gifLoading
+                            ? `Membuat di HP kamu… ${gifProgress}%`
+                            : gifError
+                              ? gifError
+                              : (media.gif_status === 'processing' || media.gif_status === 'pending')
+                                ? 'Sedang dibuat di mesin'
+                                : 'Bisa dirakit langsung di HP'}
+                      </p>
+                    </div>
+                    {effectiveGifUrl ? (
+                      <button className="row-btn" disabled={busy('gif')}
+                        onClick={()=>handleDownload(effectiveGifUrl, `photobooth_gif_${uuid.slice(0,8)}.gif`, 'gif')}>
+                        {busy('gif')
+                          ? <Loader2 size={13} style={{ animation:'spin .8s linear infinite' }}/>
+                          : <Download size={13}/>}
+                        Simpan
+                      </button>
+                    ) : gifLoading ? (
+                      <button className="row-btn ghost" disabled>
+                        <Loader2 size={13} style={{ animation:'spin .8s linear infinite' }}/>{gifProgress}%
+                      </button>
+                    ) : (media.gif_status === 'processing' || media.gif_status === 'pending') ? (
+                      <button className="row-btn ghost" disabled>
+                        <Loader2 size={13} style={{ animation:'spin .9s linear infinite' }}/>Dibuat
+                      </button>
+                    ) : (
+                      <button className="row-btn ghost" onClick={generateGif}>
+                        <Sparkles size={13}/>{gifError ? 'Coba lagi' : 'Buat'}
+                      </button>
                     )}
+                  </div>
+                )}
 
-                    {/* Error state */}
-                    {gifError&&!gifLoading&&(
-                      <div style={{width:'100%',maxWidth:300,textAlign:'center'}}>
-                        <p style={{color:'#B82018',fontSize:13,marginBottom:10}}>{gifError}</p>
-                        <button className="dl-btn" onClick={retryGif}
-                          style={{background:'rgba(212,43,34,.1)',color:'#E83530',border:'1px solid rgba(212,43,34,.2)',maxWidth:200}}>
-                          <Sparkles size={13}/>Coba Lagi
-                        </button>
-                      </div>
-                    )}
-
-                    {/* GIF result */}
-                    {effectiveGifUrl&&!gifLoading&&(
-                      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
-                        <img src={effectiveGifUrl} alt="GIF" style={{borderRadius:12,maxWidth:260,border:'1px solid rgba(212,43,34,0.08)'}}/>
-                        <button className="dl-btn" onClick={()=>handleDownload(effectiveGifUrl,`photobooth_gif_${uuid.slice(0,8)}.gif`)}
-                          style={{background:'linear-gradient(135deg,#E83530,#C02018)',color:'#fff',maxWidth:260,boxShadow:'0 4px 20px rgba(212,43,34,.3)'}}>
-                          <Download size={15}/>Download GIF
-                        </button>
-                      </div>
+                {/* Video */}
+                {media.video_status != null && (
+                  <div className="row" style={{ borderTop: photoCount > 1 ? '1px solid rgba(212,43,34,0.08)' : 'none' }}>
+                    <div className="row-icon"><Film size={17}/></div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <p style={{ fontSize:13.5, fontWeight:600, marginBottom:2 }}>Video</p>
+                      <p style={{ fontSize:11.5, color:'#9E8880' }}>
+                        {media.video_url
+                          ? 'Klip sesi digabung dengan frame'
+                          : media.video_status === 'failed'
+                            ? 'Tidak tersedia untuk sesi ini'
+                            : 'Sedang dirender di mesin'}
+                      </p>
+                    </div>
+                    {media.video_url ? (
+                      <button className="row-btn" disabled={busy('video')}
+                        onClick={()=>handleDownload(media.video_url!, `photobooth_video_${uuid.slice(0,8)}.mp4`, 'video')}>
+                        {busy('video')
+                          ? <Loader2 size={13} style={{ animation:'spin .8s linear infinite' }}/>
+                          : <Download size={13}/>}
+                        Simpan
+                      </button>
+                    ) : media.video_status === 'failed' ? (
+                      <AlertCircle size={16} color="#B0A09A" style={{ flexShrink:0 }}/>
+                    ) : (
+                      <button className="row-btn ghost" disabled>
+                        <Loader2 size={13} style={{ animation:'spin .9s linear infinite' }}/>Dirender
+                      </button>
                     )}
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* RIGHT PANEL */}
-            <div className="right-panel" style={{display:'flex',flexDirection:'column',gap:14}}>
-              {media.result_url&&(
-                <div className="glass fu3" style={{borderRadius:18,padding:20}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-                    <div style={{width:7,height:7,borderRadius:'50%',background:'#D42B22',boxShadow:'0 0 6px #D42B22'}}/>
-                    <p style={{color:'#150C09',fontSize:13,fontWeight:700}}>Photo Strip</p>
-                  </div>
-                  <p style={{color:'rgba(158,136,128,0.95)',fontSize:11,marginBottom:14,paddingLeft:15}}>Hasil final dengan frame</p>
-                  <button className="dl-btn" disabled={downloading==='strip'}
-                    onClick={()=>handleDownload(media.result_url!,`photobooth_strip_${uuid.slice(0,8)}.png`)}
-                    style={{background:'linear-gradient(135deg,#E83530,#C02018)',color:'#fff',boxShadow:'0 4px 16px rgba(212,43,34,.3)'}}>
-                    {downloading==='strip'
-                      ?<><div style={{width:14,height:14,border:'2px solid rgba(122,98,89,0.8)',borderTopColor:'#150C09',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>Mengunduh...</>
-                      :<><Download size={14}/>Download Strip</>}
-                  </button>
-                </div>
+              {/* Pemutar video muncul begitu filenya ada */}
+              {media.video_url && (
+                <video
+                  src={media.video_url} controls playsInline preload="metadata"
+                  style={{ width:'100%', marginTop:12, borderRadius:16, border:'1px solid rgba(212,43,34,0.10)', display:'block', background:'#150C09' }}/>
               )}
+            </Section>
+          )}
 
-              {photos.length>0&&(
-                <div className="glass fu3" style={{borderRadius:18,padding:20}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-                    <div style={{width:7,height:7,borderRadius:'50%',background:'#059669',boxShadow:'0 0 6px #059669'}}/>
-                    <p style={{color:'#150C09',fontSize:13,fontWeight:700}}>Foto Individual</p>
-                  </div>
-                  <p style={{color:'rgba(158,136,128,0.95)',fontSize:11,marginBottom:14,paddingLeft:15}}>{photos.length} foto tanpa frame</p>
-                  <div style={{display:'flex',flexDirection:'column',gap:7}}>
-                    {photos.map((p,i)=>(
-                      <button key={i} className="dl-btn" disabled={downloading===`photo_${i}`}
-                        onClick={()=>handleDownload(p.photo_url,`foto_${i+1}_${uuid.slice(0,8)}.jpg`)}
-                        style={{background:'rgba(16,185,129,.1)',color:'#059669',border:'1px solid rgba(16,185,129,.2)'}}>
-                        {downloading===`photo_${i}`?<div style={{width:13,height:13,border:'2px solid rgba(52,211,153,.3)',borderTopColor:'#059669',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>:<Download size={13}/>}
-                        Foto {i+1}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {(media.video_url||media.video_status==='processing'||media.video_status==='pending')&&(
-                <div className="glass fu4" style={{borderRadius:18,padding:20}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-                    <div style={{width:7,height:7,borderRadius:'50%',background:'#E83530',boxShadow:'0 0 6px #E83530'}}/>
-                    <p style={{color:'#150C09',fontSize:13,fontWeight:700}}>Video</p>
-                  </div>
-                  <p style={{color:'rgba(158,136,128,0.95)',fontSize:11,marginBottom:14,paddingLeft:15}}>
-                    {media.video_url?'Klip sesi digabung dengan frame':'Sedang dirender di mesin'}
-                  </p>
-                  {media.video_url?(
-                    <button className="dl-btn" onClick={()=>handleDownload(media.video_url!,`photobooth_video_${uuid.slice(0,8)}.mp4`)}
-                      style={{background:'linear-gradient(135deg,#E83530,#C02018)',color:'#fff',boxShadow:'0 4px 16px rgba(212,43,34,.25)'}}>
-                      <Download size={14}/>Download Video
-                    </button>
-                  ):(
-                    <button className="dl-btn" disabled style={{background:'rgba(212,43,34,.08)',color:'#E83530',border:'1px solid rgba(212,43,34,.15)'}}>
-                      <div style={{width:13,height:13,border:'2px solid rgba(212,43,34,.3)',borderTopColor:'#E83530',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>
-                      Sedang dirender
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {photos.length>1&&(
-                <div className="glass fu4" style={{borderRadius:18,padding:20}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-                    <div style={{width:7,height:7,borderRadius:'50%',background:'#E83530',boxShadow:'0 0 6px #E83530'}}/>
-                    <p style={{color:'#150C09',fontSize:13,fontWeight:700}}>GIF Animasi</p>
-                  </div>
-                  <p style={{color:'rgba(158,136,128,0.95)',fontSize:11,marginBottom:14,paddingLeft:15}}>
-                    {serverGifUrl?'Dibuat di mesin photobooth':'Dibuat otomatis di browser'}
-                  </p>
-                  {effectiveGifUrl?(
-                    <button className="dl-btn" onClick={()=>handleDownload(effectiveGifUrl,`photobooth_gif_${uuid.slice(0,8)}.gif`)}
-                      style={{background:'linear-gradient(135deg,#E83530,#C02018)',color:'#fff',boxShadow:'0 4px 16px rgba(212,43,34,.25)'}}>
-                      <Download size={14}/>Download GIF
-                    </button>
-                  ):(media.gif_status==='processing'||media.gif_status==='pending')?(
-                    <button className="dl-btn" disabled style={{background:'rgba(212,43,34,.08)',color:'#E83530',border:'1px solid rgba(212,43,34,.15)'}}>
-                      <div style={{width:13,height:13,border:'2px solid rgba(212,43,34,.3)',borderTopColor:'#E83530',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>
-                      Sedang dibuat di mesin
-                    </button>
-                  ):gifLoading?(
-                    <button className="dl-btn" disabled style={{background:'rgba(212,43,34,.08)',color:'#E83530',border:'1px solid rgba(212,43,34,.15)'}}>
-                      <div style={{width:13,height:13,border:'2px solid rgba(212,43,34,.3)',borderTopColor:'#E83530',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>
-                      Membuat GIF... {gifProgress}%
-                    </button>
-                  ):gifError?(
-                    <button className="dl-btn" onClick={retryGif}
-                      style={{background:'rgba(212,43,34,.08)',color:'#E83530',border:'1px solid rgba(212,43,34,.15)'}}>
-                      <Sparkles size={14}/>Coba Lagi
-                    </button>
-                  ):(
-                    <button className="dl-btn" onClick={()=>setActiveTab('gif')}
-                      style={{background:'rgba(212,43,34,.08)',color:'#E83530',border:'1px solid rgba(212,43,34,.15)'}}>
-                      <Sparkles size={14}/>Buat GIF
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <div className="fu4" style={{textAlign:'center',paddingTop:4}}>
-                <p style={{color:'#B0A09A',fontSize:10,letterSpacing:'1.5px',fontFamily:'Poppins,sans-serif',textTransform:'uppercase'}}>Powered by</p>
-                <p style={{color:'rgba(158,136,128,0.95)',fontSize:15,fontWeight:700,fontFamily:'Poppins,sans-serif',marginTop:2}}>{clientName}</p>
-              </div>
-            </div>
-          </div>
+          {/* ── FOOTER ── */}
+          <footer className="rise-3" style={{ marginTop:44, textAlign:'center' }}>
+            <div style={{ height:1, background:'rgba(212,43,34,0.10)', marginBottom:20 }}/>
+            <p style={{ fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:'#B0A09A', marginBottom:6 }}>
+              Powered by
+            </p>
+            <p style={{ fontSize:14, fontWeight:700, color:'#7A6259' }}>{clientName}</p>
+            <code style={{ display:'block', marginTop:10, fontSize:10, color:'#C7B8B2', fontFamily:'monospace' }}>
+              {uuid.slice(0,24)}…
+            </code>
+          </footer>
         </div>
       </div>
 
-      {lightbox&&(
+      {/* ── LIGHTBOX ── */}
+      {lightbox && (
         <div className="lb" onClick={()=>setLightbox(null)}
-          style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.92)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,cursor:'pointer'}}>
-          <img src={lightbox} alt="Preview"
-            style={{maxWidth:'92vw',maxHeight:'92vh',objectFit:'contain',borderRadius:12,boxShadow:'0 32px 64px rgba(0,0,0,.8)'}}
+          style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(21,12,9,.94)', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, cursor:'zoom-out' }}>
+          <img src={lightbox} alt="Pratinjau"
+            style={{ maxWidth:'92vw', maxHeight:'88dvh', objectFit:'contain', borderRadius:12 }}
             onClick={e=>e.stopPropagation()}/>
-          <button onClick={()=>setLightbox(null)}
-            style={{position:'fixed',top:16,right:16,background:'rgba(255,255,255,0.14)',border:'1px solid rgba(255,255,255,0.28)',borderRadius:'50%',width:40,height:40,color:'#fff',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <button onClick={()=>setLightbox(null)} aria-label="Tutup"
+            style={{ position:'fixed', top:'max(16px, env(safe-area-inset-top))', right:16, width:40, height:40, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,255,255,0.14)', border:'1px solid rgba(255,255,255,0.28)', color:'#fff', fontSize:17 }}>
             ✕
           </button>
         </div>

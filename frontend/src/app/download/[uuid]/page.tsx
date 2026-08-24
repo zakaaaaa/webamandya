@@ -15,12 +15,31 @@ export default async function Page({ params }: { params: Promise<{ uuid: string 
     .eq('transaction_code', uuid)
     .maybeSingle()
 
+  // Halaman ini dibuka pelanggan dari QR code. Kalau kodenya salah ketik atau
+  // sesinya sudah dihapus, jangan lempar pesan teknis — cukup beri tahu
+  // dengan bahasa manusia. Detail error tetap ada di log server.
   if (!session) {
+    if (error) console.error('[download] gagal memuat sesi', uuid, error.message)
     return (
-      <div style={{ color:'#150C09', padding:40, background:'#FAF7F5', minHeight:'100vh' }}>
-        <h2>Session tidak ditemukan</h2>
-        <p>UUID: {uuid}</p>
-        <p>Error: {error?.message ?? 'null'}</p>
+      <div style={{
+        minHeight:'100dvh', background:'#FAF7F5', color:'#150C09',
+        fontFamily:"'Poppins',sans-serif",
+        display:'flex', alignItems:'center', justifyContent:'center', padding:24,
+      }}>
+        <div style={{ textAlign:'center', maxWidth:360 }}>
+          <img src="/logo-pk.webp" alt="Pabrik Kenangan" width={196} height={110}
+            style={{ width:150, height:'auto', margin:'0 auto 24px', display:'block' }}/>
+          <h1 style={{ fontSize:20, fontWeight:800, marginBottom:8, letterSpacing:'-0.01em' }}>
+            Sesi tidak ditemukan
+          </h1>
+          <p style={{ fontSize:13.5, color:'#9E8880', lineHeight:1.6 }}>
+            Link ini sudah tidak berlaku atau kodenya keliru. Coba scan ulang QR code
+            di layar photobooth, atau hubungi petugas di lokasi.
+          </p>
+          <code style={{ display:'block', marginTop:20, fontSize:10, color:'#C7B8B2', fontFamily:'monospace' }}>
+            {uuid}
+          </code>
+        </div>
       </div>
     )
   }
