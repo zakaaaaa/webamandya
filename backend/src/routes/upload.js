@@ -45,6 +45,19 @@ router.post('/', uploadImage.single('photo'), async (req, res) => {
     return res.status(500).json({ success: false, message: 'Gagal upload foto.' });
   }
 
+  // Mesin photobooth mengulang unggahan yang gagal lewat antrean lokal, dan
+  // sebuah percobaan bisa saja sebenarnya sudah sampai di sini sebelum
+  // jawabannya hilang di jalan. Kunci objek R2-nya deterministik (tertimpa,
+  // aman), tapi baris database-nya tidak — tanpa ini foto yang sama bisa
+  // muncul dua kali di galeri dan halaman unduh.
+  if (hasOrder) {
+    await supabase
+      .from('photos')
+      .delete()
+      .eq('session_id', session.id)
+      .eq('photo_order', order);
+  }
+
   await supabase.from('photos').insert({
     session_id: session.id,
     photo_url: stored.url,
