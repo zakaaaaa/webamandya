@@ -107,13 +107,19 @@ export default function DevicesManager({
         .modal-overlay { animation: fade-in 0.2s ease both; }
         .modal-card    { animation: fade-up 0.3s ease both; }
         select option  { background: #FFFFFF; color: #150C09; }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); }
+
+        /* Modal: dibatasi tinggi layar, isinya yang menggulir. */
+        .dm-modal { max-height:min(90vh,90dvh); display:flex; flex-direction:column; }
+        .dm-modal-body { overflow-y:auto; flex:1; min-height:0; }
+        @media (max-width: 520px) { .dm-modal { padding:24px 20px !important; border-radius:20px !important; } }
       `}</style>
 
-      <div style={{ fontFamily:"'Poppins',sans-serif", minHeight:'100vh', padding:'32px 36px' }}>
+      {/* Padding halaman datang dari .dashboard-main — jangan ditambah lagi
+          di sini, dulu jadi dobel (72px kiri-kanan) dan konten terhimpit. */}
+      <div style={{ fontFamily:"'Poppins',sans-serif" }}>
 
         {/* Header */}
-        <div className="page-anim" style={{ marginBottom:'32px', display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
+        <div className="page-anim" style={{ marginBottom:'32px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:'14px' }}>
           <div>
             <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px' }}>
               <div style={{ width:'3px', height:'20px', borderRadius:'2px', background:'linear-gradient(to bottom,#E83530,#D42B22)' }} />
@@ -143,8 +149,8 @@ export default function DevicesManager({
             <h2 style={{ color:'#150C09', fontSize:'15px', fontWeight:600, fontFamily:'Poppins,sans-serif' }}>Daftar Perangkat</h2>
           </div>
 
-          <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+          <div className="pk-table-wrap">
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:820 }}>
               <thead>
                 <tr style={{ borderBottom:'1px solid rgba(212,43,34,0.04)' }}>
                   {['Nama Perangkat', ...(isSuperAdmin ? ['Client'] : []), 'HWID', 'Lisensi Berakhir', 'Status', 'Aksi'].map(h => (
@@ -221,13 +227,14 @@ export default function DevicesManager({
               </tbody>
             </table>
           </div>
+          <p className="table-scroll-hint">← geser untuk melihat kolom lainnya</p>
         </div>
       </div>
 
       {/* Modal Daftarkan HWID */}
       {showModal && (
         <div className="modal-overlay" style={{ position:'fixed', inset:0, zIndex:50, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }}>
-          <div className="modal-card" style={{ width:'100%', maxWidth:'440px', background:'#FFFFFF', border:'1px solid rgba(212,43,34,0.10)', borderRadius:'24px', padding:'36px', boxShadow:'0 32px 64px rgba(0,0,0,0.25)', position:'relative', overflow:'hidden' }}>
+          <div className="modal-card dm-modal" style={{ width:'100%', maxWidth:'440px', background:'#FFFFFF', border:'1px solid rgba(212,43,34,0.10)', borderRadius:'24px', padding:'36px', boxShadow:'0 32px 64px rgba(0,0,0,0.25)', position:'relative', overflow:'hidden' }}>
             <div style={{ position:'absolute', top:0, left:'24px', right:'24px', height:'1px', background:'linear-gradient(90deg,transparent,rgba(212,43,34,0.10),transparent)' }} />
 
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'28px' }}>
@@ -240,7 +247,7 @@ export default function DevicesManager({
               </button>
             </div>
 
-            <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
+            <div className="dm-modal-body" style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
               {/* Client selector — super admin only */}
               {isSuperAdmin && (
                 <div>

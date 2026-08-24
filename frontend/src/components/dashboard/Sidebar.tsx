@@ -162,13 +162,17 @@ export default function Sidebar({ role }: { role: string }) {
           border-radius: 20px; padding: 4px 10px;
         }
 
-        /* ── SIDEBAR (dipakai desktop & drawer mobile) ── */
+        /* ── SIDEBAR (dipakai desktop & drawer mobile) ──
+           Lebarnya diambil dari --pk-sidebar-w yang juga dipakai margin
+           konten utama, jadi keduanya mustahil selisih. */
         .sidebar-panel {
           display: flex; flex-direction: column;
-          width: 248px; padding: 22px 16px;
+          width: var(--pk-sidebar-w);
+          padding: 22px 16px max(22px, env(safe-area-inset-bottom));
           background: #FFFFFF;
           font-family: 'Poppins', sans-serif;
           overflow-y: auto;
+          overscroll-behavior: contain;
         }
         .sidebar-desktop {
           position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
@@ -180,12 +184,18 @@ export default function Sidebar({ role }: { role: string }) {
         .mobile-topbar {
           display: none;
           position: fixed; top: 0; left: 0; right: 0; height: 58px; z-index: 90;
-          align-items: center; gap: 12px; padding: 0 12px;
+          align-items: center; gap: 12px;
+          padding-top: 0; padding-bottom: 0;
+          padding-left: max(12px, env(safe-area-inset-left));
+          padding-right: max(12px, env(safe-area-inset-right));
           background: rgba(255,255,255,0.94);
           backdrop-filter: blur(10px);
           border-bottom: 1px solid rgba(212,43,34,0.09);
           font-family: 'Poppins', sans-serif;
         }
+        /* Logo di topbar ikut mengecil di layar sangat sempit agar tidak
+           mendesak tombol menu. */
+        .mobile-topbar img { max-height: 40px; width: auto; }
         .drawer-btn {
           display: flex; align-items: center; justify-content: center;
           width: 42px; height: 42px; flex-shrink: 0;
@@ -207,7 +217,9 @@ export default function Sidebar({ role }: { role: string }) {
           position: fixed; top: 0; left: 0; bottom: 0; z-index: 120;
           box-shadow: 6px 0 32px rgba(21,12,9,0.22);
           animation: drawer-in .22s cubic-bezier(.22,.61,.36,1);
+          width: min(var(--pk-sidebar-w), 86vw);
           max-width: 86vw;
+          padding-left: max(16px, env(safe-area-inset-left));
         }
         @keyframes scrim-in  { from { opacity: 0 } to { opacity: 1 } }
         @keyframes drawer-in { from { transform: translateX(-100%) } to { transform: translateX(0) } }
@@ -216,7 +228,10 @@ export default function Sidebar({ role }: { role: string }) {
           .drawer-scrim, .drawer-panel { animation: none; }
         }
 
-        @media (max-width: 768px) {
+        /* Ambang drawer dinaikkan ke 900px: di 769–900px (tablet kecil dan
+           ponsel lanskap) sidebar 248px memakan terlalu banyak lebar dan
+           konten jadi terjepit. */
+        @media (max-width: 900px) {
           .sidebar-desktop { display: none !important; }
           .mobile-topbar   { display: flex; }
         }

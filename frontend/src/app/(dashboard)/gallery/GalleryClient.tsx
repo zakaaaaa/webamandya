@@ -150,10 +150,51 @@ export default function GalleryClient({
         .select-field { background:rgba(212,43,34,0.055); border:1px solid rgba(212,43,34,0.07); border-radius:10px; color:rgba(21,12,9,0.85); font-size:13px; padding:8px 12px; outline:none; cursor:pointer; font-family:'Poppins',sans-serif; }
         .select-field:focus { border-color:rgba(212,43,34,.4) }
         option { background:#FFFFFF; color:#150C09 }
-        @media (max-width:768px) { .gallery-grid-inner { grid-template-columns:repeat(2,1fr)!important } }
+
+        /* ── GRID GALERI ──
+           Kerapatan kolom mengikuti lebar yang benar-benar tersedia, bukan
+           satu lompatan dari 4 kolom ke 2 kolom. */
+        .gallery-grid-inner {
+          display:grid; gap:14px;
+          grid-template-columns:repeat(4,minmax(0,1fr));
+        }
+        /* 4 kolom sampai ~1000px (sidebar 248px sudah diperhitungkan),
+           3 kolom di tablet, 2 kolom di ponsel — kartu tidak pernah
+           menyempit di bawah ~150px. */
+        @media (max-width:1000px){ .gallery-grid-inner { grid-template-columns:repeat(3,minmax(0,1fr)) } }
+        @media (max-width:620px) { .gallery-grid-inner { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px } }
+
+        /* ── TOOLBAR ──
+           Di layar sempit kontrol berdiri sendiri-sendiri satu baris penuh
+           supaya nama perangkat & tanggal tidak terpotong. */
+        @media (max-width:600px) {
+          .toolbar-row { gap:8px !important }
+          .toolbar-row > div:first-child { flex-basis:100% !important; }
+          .toolbar-row .select-field { width:100%; }
+          .toolbar-row > div:nth-child(2),
+          .toolbar-row > div:nth-child(3) { flex:1 1 45%; min-width:0 }
+          .toolbar-count { margin-left:0 !important; flex-basis:100% }
+        }
+
+        /* ── LIGHTBOX ──
+           Panel meta 220px di samping gambar tidak muat di layar sempit;
+           di bawah 820px ia turun ke bawah gambar. */
+        @media (max-width:820px) {
+          /* Satu area gulir saja (induknya), bukan dua area bersarang yang
+             saling berebut ruang saat gambar dan panel meta ditumpuk. */
+          .lb-body { flex-direction:column; overflow:auto !important }
+          .lb-body > div { flex:none !important; overflow:visible !important }
+          .lb-meta {
+            width:100% !important;
+            border-left:none !important;
+            border-top:1px solid rgba(212,43,34,0.055);
+            flex-shrink:1 !important;
+          }
+          .lb-head { flex-wrap:wrap; gap:10px }
+        }
       `}</style>
 
-      <div style={{ fontFamily:"'Poppins',sans-serif", minHeight:'100vh' }}>
+      <div style={{ fontFamily:"'Poppins',sans-serif" }}>
 
         {/* PAGE HEADER */}
         <div className="page-header" style={{ marginBottom:'28px' }}>
@@ -210,7 +251,7 @@ export default function GalleryClient({
           </div>
           <div style={{ position:'relative' }}>
             <Calendar size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'rgba(122,98,89,0.8)', pointerEvents:'none' }}/>
-            <input type="date" className="select-field" style={{ paddingLeft:30, colorScheme:'dark' }} value={filters.date} onChange={e => pushFilter({ date:e.target.value })}/>
+            <input type="date" className="select-field" style={{ paddingLeft:30, colorScheme:'light' }} value={filters.date} onChange={e => pushFilter({ date:e.target.value })}/>
           </div>
           {activeFilterCount > 0 && (
             <button className="btn-icon" onClick={() => { setLocalSearch(''); pushFilter({ device:'', date:'', search:'' }) }}
@@ -219,7 +260,7 @@ export default function GalleryClient({
             </button>
           )}
           {isPending && <div style={{ width:16,height:16,border:'2px solid rgba(212,43,34,.3)',borderTopColor:'#D42B22',borderRadius:'50%',animation:'spin .8s linear infinite',flexShrink:0 }}/>}
-          <div style={{ marginLeft:'auto', color:'rgba(158,136,128,0.95)', fontSize:'12px', flexShrink:0 }}>{sessions.length} / {totalCount} foto</div>
+          <div className="toolbar-count" style={{ marginLeft:'auto', color:'rgba(158,136,128,0.95)', fontSize:'12px', flexShrink:0 }}>{sessions.length} / {totalCount} foto</div>
         </div>
 
         {/* GALLERY GRID */}
@@ -233,7 +274,7 @@ export default function GalleryClient({
               <p style={{ color:'rgba(158,136,128,0.85)', fontSize:'13px' }}>{activeFilterCount > 0 ? 'Coba ubah filter pencarian' : 'Foto akan muncul setelah sesi selesai'}</p>
             </div>
           ) : (
-            <div className="gallery-grid-inner" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14 }}>
+            <div className="gallery-grid-inner">
               {sessions.map((s, idx) => {
                 const thumb      = s.result_url ?? s.photos[0]?.photo_url ?? null
                 const isSelected = selected.has(s.id)
@@ -323,9 +364,9 @@ export default function GalleryClient({
         <div className="lb-backdrop" onClick={() => setLightbox(null)}
           style={{ position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.92)',backdropFilter:'blur(16px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20 }}>
           <div className="lb-content" onClick={e => e.stopPropagation()}
-            style={{ background:'#FFFFFF',border:'1px solid rgba(212,43,34,0.10)',borderRadius:20,width:'100%',maxWidth:820,maxHeight:'90vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 30px 80px rgba(0,0,0,0.25)' }}>
+            style={{ background:'#FFFFFF',border:'1px solid rgba(212,43,34,0.10)',borderRadius:20,width:'100%',maxWidth:820,maxHeight:'min(90vh, 90dvh)',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 30px 80px rgba(0,0,0,0.25)' }}>
             {/* Header */}
-            <div style={{ padding:'16px 20px',borderBottom:'1px solid rgba(212,43,34,0.055)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0 }}>
+            <div className="lb-head" style={{ padding:'16px 20px',borderBottom:'1px solid rgba(212,43,34,0.055)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0 }}>
               <div>
                 <p style={{ color:'rgba(122,98,89,0.8)',fontSize:'10px',letterSpacing:'2px',textTransform:'uppercase',fontFamily:'Poppins,sans-serif',marginBottom:2 }}>Detail Sesi</p>
                 <p style={{ color:'#150C09',fontSize:'14px',fontWeight:600,fontFamily:'monospace' }}>{lightbox.transaction_code}</p>
@@ -346,7 +387,7 @@ export default function GalleryClient({
               </div>
             </div>
             {/* Body */}
-            <div style={{ display:'flex', flex:1, overflow:'hidden', minHeight:0 }}>
+            <div className="lb-body" style={{ display:'flex', flex:1, overflow:'hidden', minHeight:0 }}>
               {/* Kiri — gambar */}
               <div style={{ flex:1, overflow:'auto', padding:20, display:'flex', flexDirection:'column', gap:12 }}>
                 <div style={{ display:'flex', gap:6 }}>
@@ -377,7 +418,7 @@ export default function GalleryClient({
                 )}
               </div>
               {/* Kanan — meta */}
-              <div style={{ width:220,borderLeft:'1px solid rgba(212,43,34,0.055)',padding:20,flexShrink:0,overflow:'auto',display:'flex',flexDirection:'column',gap:16 }}>
+              <div className="lb-meta" style={{ width:220,borderLeft:'1px solid rgba(212,43,34,0.055)',padding:20,flexShrink:0,overflow:'auto',display:'flex',flexDirection:'column',gap:16 }}>
                 <div>
                   <p style={{ color:'rgba(158,136,128,0.85)',fontSize:'10px',letterSpacing:'1.5px',textTransform:'uppercase',fontFamily:'Poppins,sans-serif',marginBottom:10 }}>Info Sesi</p>
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>

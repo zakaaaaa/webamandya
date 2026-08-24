@@ -633,7 +633,7 @@ export default function FrameSlotEditor({
 
           {/* Legend */}
           <div className="fse-legend" style={{ padding:'12px 14px', borderRadius:10, background:'rgba(212,43,34,.05)', border:'1px solid rgba(212,43,34,.12)' }}>
-            <p style={{ color:'rgba(165,180,252,.55)', fontSize:12, lineHeight:2, fontFamily:'Poppins,sans-serif' }}>
+            <p style={{ color:'#7A6259', fontSize:12, lineHeight:2, fontFamily:'Poppins,sans-serif' }}>
               Angka = urutan slot<br/>
               F1, F2 = foto ke berapa<br/>
               Slot F sama = foto diulang

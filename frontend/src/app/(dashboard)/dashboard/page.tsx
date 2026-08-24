@@ -162,24 +162,28 @@ export default async function DashboardPage() {
         .table-section { animation: fade-up 0.5s ease 0.35s both; }
         .page-header   { animation: fade-up 0.5s ease 0.0s  both; }
 
+        /* minmax(0,1fr) — bukan 1fr — supaya angka panjang seperti
+           "Rp 1.250.000" tidak melebarkan kolom dan merusak grid. */
         .stats-grid { display: grid; gap: 16px; margin-bottom: 28px; }
-        .stats-grid.super { grid-template-columns: repeat(3, 1fr); }
-        .stats-grid.admin { grid-template-columns: repeat(4, 1fr); }
+        .stats-grid.super { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .stats-grid.admin { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 
-        @media (max-width: 1024px) {
-          .stats-grid.super { grid-template-columns: repeat(3, 1fr); }
-          .stats-grid.admin { grid-template-columns: repeat(2, 1fr); }
+        @media (max-width: 1100px) {
+          .stats-grid.super,
+          .stats-grid.admin { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
         @media (max-width: 768px) {
-          .stats-grid.super { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-          .stats-grid.admin { grid-template-columns: repeat(2, 1fr); gap: 12px; }
-          .page-header h1   { font-size: 22px !important; }
-          .page-header       { padding-top: 52px; }
+          .stats-grid { gap: 12px; }
+          .page-header h1 { font-size: 22px !important; }
         }
-        @media (max-width: 480px) {
-          .stats-grid.super { grid-template-columns: 1fr; }
-          .stats-grid.admin { grid-template-columns: 1fr; }
-          .stat-value { font-size: 22px !important; }
+        @media (max-width: 520px) {
+          .stats-grid.super,
+          .stats-grid.admin { grid-template-columns: minmax(0, 1fr); }
+        }
+        /* Nilai statistik menyusut mengikuti lebar kartu, tidak terpotong. */
+        .stat-value {
+          font-size: clamp(21px, 2.1vw + 8px, 28px) !important;
+          overflow-wrap: anywhere;
         }
 
         .quick-link {
@@ -197,12 +201,12 @@ export default async function DashboardPage() {
           color: #D42B22; transform: translateX(3px);
         }
 
-        .super-admin-info { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 28px; }
-        @media (max-width: 768px) { .super-admin-info { grid-template-columns: 1fr; } }
+        .super-admin-info { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 28px; }
+        @media (max-width: 900px) { .super-admin-info { grid-template-columns: minmax(0, 1fr); } }
         .hwid-full-width { grid-column: 1 / -1; }
       `}</style>
 
-      <div style={{ fontFamily: "'Poppins',sans-serif", minHeight: '100vh' }}>
+      <div style={{ fontFamily: "'Poppins',sans-serif" }}>
 
         {/* ── HEADER ── */}
         <div className="page-header" style={{ marginBottom: '32px' }}>
@@ -372,8 +376,8 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="pk-table-wrap">
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid rgba(212,43,34,0.07)' }}>
                     {['Kode Transaksi', 'Perangkat', 'Metode', 'Status', 'Jumlah', 'Waktu'].map(h => (
@@ -438,6 +442,7 @@ export default async function DashboardPage() {
                 </tbody>
               </table>
             </div>
+            <p className="table-scroll-hint">← geser untuk melihat kolom lainnya</p>
           </div>
         )}
       </div>

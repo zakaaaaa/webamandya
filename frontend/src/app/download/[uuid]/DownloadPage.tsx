@@ -316,15 +316,20 @@ export default function DownloadPage({
         .lb{animation:fade-in .15s ease both}
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-thumb{background:rgba(212,43,34,0.08);border-radius:2px}
-        @media(max-width:768px){.main-grid{grid-template-columns:1fr !important}.right-panel{order:-1}}
+        @media(max-width:900px){.main-grid{grid-template-columns:minmax(0,1fr) !important}.right-panel{order:-1}}
+        /* Halaman ini paling sering dibuka dari HP: rapatkan paddingnya. */
+        @media(max-width:520px){
+          .dl-wrap{padding:24px 14px 64px !important}
+          .dl-btn{padding:12px 14px}
+        }
       `}</style>
 
-      <div style={{minHeight:'100vh',position:'relative',overflow:'hidden',background:'linear-gradient(135deg,#FAF7F5 0%,#FAF7F5 50%,#FAF7F5 100%)'}}>
+      <div style={{minHeight:'100dvh',position:'relative',overflow:'hidden',background:'linear-gradient(135deg,#FAF7F5 0%,#FAF7F5 50%,#FAF7F5 100%)'}}>
         <div style={{position:'fixed',width:600,height:600,top:-150,left:-150,borderRadius:'50%',filter:'blur(80px)',pointerEvents:'none',zIndex:0,background:'radial-gradient(circle,rgba(212,43,34,.15) 0%,transparent 70%)',animation:'float-1 18s ease-in-out infinite'}}/>
         <div style={{position:'fixed',width:500,height:500,bottom:-100,right:-100,borderRadius:'50%',filter:'blur(80px)',pointerEvents:'none',zIndex:0,background:'radial-gradient(circle,rgba(212,43,34,.12) 0%,transparent 70%)',animation:'float-2 22s ease-in-out infinite'}}/>
         <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0,backgroundImage:'linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px)',backgroundSize:'56px 56px'}}/>
 
-        <div style={{position:'relative',zIndex:10,maxWidth:1000,margin:'0 auto',padding:'36px 20px 80px'}}>
+        <div className="dl-wrap" style={{position:'relative',zIndex:10,maxWidth:1000,margin:'0 auto',padding:'36px 20px 80px'}}>
 
           {/* Header */}
           <div className="fu1" style={{textAlign:'center',marginBottom:32}}>
@@ -353,11 +358,11 @@ export default function DownloadPage({
               <Clock size={13} color="rgba(122,98,89,0.8)"/>
               <span style={{color:'rgba(122,98,89,0.8)',fontSize:12}}>{formatDate(session.created_at)}</span>
             </div>
-            <code style={{marginLeft:'auto',color:'rgba(212,43,34,0.10)',fontSize:10,fontFamily:'monospace'}}>{uuid.slice(0,24)}...</code>
+            <code style={{marginLeft:'auto',color:'#B0A09A',fontSize:10,fontFamily:'monospace'}}>{uuid.slice(0,24)}...</code>
           </div>
 
           {/* Main grid */}
-          <div className="main-grid" style={{display:'grid',gridTemplateColumns:'1fr 300px',gap:20,alignItems:'start'}}>
+          <div className="main-grid" style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) 300px',gap:20,alignItems:'start'}}>
 
             {/* LEFT */}
             <div>
@@ -428,7 +433,7 @@ export default function DownloadPage({
                       <div key={i} className="photo-card" onClick={()=>setLightbox(p.photo_url)}
                         style={{borderRadius:10,overflow:'hidden',boxShadow:'0 4px 16px rgba(0,0,0,.4)',border:'1px solid rgba(212,43,34,0.055)',position:'relative'}}>
                         <img src={p.photo_url} alt={`Foto ${i+1}`} style={{width:'100%',aspectRatio:'1',objectFit:'cover',objectPosition:'center top',display:'block'}}/>
-                        <div style={{position:'absolute',top:7,left:7,background:'rgba(0,0,0,.65)',borderRadius:5,padding:'2px 7px',color:'rgba(21,12,9,0.9)',fontSize:11,fontWeight:700}}>{i+1}</div>
+                        <div style={{position:'absolute',top:7,left:7,background:'rgba(0,0,0,.65)',borderRadius:5,padding:'2px 7px',color:'#fff',fontSize:11,fontWeight:700}}>{i+1}</div>
                         <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'18px 8px 8px',background:'linear-gradient(to top,rgba(0,0,0,.75),transparent)',display:'flex',justifyContent:'center'}}>
                           <button onClick={e=>{e.stopPropagation();handleDownload(p.photo_url,`foto_${i+1}_${uuid.slice(0,8)}.jpg`)}}
                             style={{background:'rgba(212,43,34,0.10)',border:'1px solid rgba(158,136,128,0.85)',borderRadius:7,padding:'4px 10px',color:'#150C09',fontSize:11,cursor:'pointer',display:'flex',alignItems:'center',gap:4,fontFamily:"'Poppins',sans-serif"}}>
@@ -630,7 +635,7 @@ export default function DownloadPage({
               )}
 
               <div className="fu4" style={{textAlign:'center',paddingTop:4}}>
-                <p style={{color:'rgba(212,43,34,0.08)',fontSize:10,letterSpacing:'1.5px',fontFamily:'Poppins,sans-serif',textTransform:'uppercase'}}>Powered by</p>
+                <p style={{color:'#B0A09A',fontSize:10,letterSpacing:'1.5px',fontFamily:'Poppins,sans-serif',textTransform:'uppercase'}}>Powered by</p>
                 <p style={{color:'rgba(158,136,128,0.95)',fontSize:15,fontWeight:700,fontFamily:'Poppins,sans-serif',marginTop:2}}>{clientName}</p>
               </div>
             </div>
@@ -645,7 +650,7 @@ export default function DownloadPage({
             style={{maxWidth:'92vw',maxHeight:'92vh',objectFit:'contain',borderRadius:12,boxShadow:'0 32px 64px rgba(0,0,0,.8)'}}
             onClick={e=>e.stopPropagation()}/>
           <button onClick={()=>setLightbox(null)}
-            style={{position:'fixed',top:16,right:16,background:'rgba(212,43,34,0.08)',border:'1px solid rgba(212,43,34,0.10)',borderRadius:'50%',width:40,height:40,color:'#150C09',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            style={{position:'fixed',top:16,right:16,background:'rgba(255,255,255,0.14)',border:'1px solid rgba(255,255,255,0.28)',borderRadius:'50%',width:40,height:40,color:'#fff',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
             ✕
           </button>
         </div>

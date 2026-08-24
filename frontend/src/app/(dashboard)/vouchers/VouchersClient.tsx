@@ -152,9 +152,32 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
         .sinp::placeholder{color:rgba(158,136,128,0.95)} .sinp:focus{border-color:rgba(212,43,34,.4);background:rgba(212,43,34,0.07)}
         select.inp option,select.sinp option{background:#FFFFFF;color:#150C09}
         @media print{body *{visibility:hidden}.print-area,.print-area *{visibility:visible}.print-area{position:fixed;top:0;left:0;width:100%;padding:20px}.no-print{display:none!important}}
+
+        /* ── KARTU STATISTIK ──
+           Sebelumnya dipaku 4 kolom di semua lebar, jadi di ponsel tiap kartu
+           hanya ~75px dan angkanya menumpuk. */
+        .v-stats { display:grid; gap:14px; margin-bottom:24px; grid-template-columns:repeat(4,minmax(0,1fr)) }
+        @media (max-width:1100px){ .v-stats { grid-template-columns:repeat(2,minmax(0,1fr)) } }
+        @media (max-width:520px) { .v-stats { gap:10px } .v-stats .glass-card { padding:16px !important } }
+
+        /* Kartu voucher siap cetak: ikut lebar layar, tapi tetap 4 kolom
+           saat benar-benar dicetak. */
+        .print-grid { display:grid; gap:10px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)) }
+        @media print { .print-grid { grid-template-columns:repeat(4,1fr) } }
+
+        /* Modal: tinggi dibatasi layar, isinya yang menggulir — sebelumnya
+           tombol simpan bisa terdorong keluar layar di ponsel. */
+        .vc-modal { max-height:min(90vh,90dvh); display:flex; flex-direction:column }
+        .vc-modal-body { overflow-y:auto; flex:1; min-height:0 }
+        .vc-modal-head, .vc-modal-foot { flex-shrink:0 }
+        @media (max-width:520px) {
+          .vc-modal-body { padding:18px !important }
+          .vc-modal-head, .vc-modal-foot { padding-left:18px !important; padding-right:18px !important }
+          .seg-btn { font-size:11px; padding:8px 2px }
+        }
       `}</style>
 
-      <div style={{fontFamily:"'Poppins',sans-serif",minHeight:'100vh'}}>
+      <div style={{fontFamily:"'Poppins',sans-serif"}}>
         {/* HEADER */}
         <div className="ph" style={{marginBottom:28}}>
           <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
@@ -166,7 +189,7 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
               <h1 style={{color:'#150C09',fontSize:28,fontWeight:700,fontFamily:'Poppins,sans-serif',marginBottom:4}}>Kelola Voucher</h1>
               <p style={{color:'rgba(122,98,89,0.8)',fontSize:14}}>Buat & bagikan voucher gratis untuk customer</p>
             </div>
-            <div style={{display:'flex',gap:8}}>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
               <button className="btn" onClick={()=>{setModal('bulk');setError('')}} style={{background:'rgba(212,43,34,.12)',color:'#E83530',border:'1px solid rgba(212,43,34,.2)'}}>
                 <Sparkles size={14}/>Generate Massal
               </button>
@@ -181,7 +204,7 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
         </div>
 
         {/* STATS */}
-        <div className="sh" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:24}}>
+        <div className="sh v-stats">
           {[
             {label:'Total Voucher',value:stats.total,color:'rgba(212,43,34,.25)',icon:Ticket},
             {label:'Aktif',value:stats.totalActive,color:'rgba(16,185,129,.25)',icon:Check},
@@ -216,8 +239,8 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
 
         {/* TABLE */}
         <div className="tbl glass-card" style={{overflow:'hidden'}}>
-          <div style={{overflowX:'auto'}}>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
+          <div className="pk-table-wrap">
+            <table style={{width:'100%',borderCollapse:'collapse',minWidth:860}}>
               <thead>
                 <tr style={{borderBottom:'1px solid rgba(212,43,34,0.05)'}}>
                   {['Kode','Diskon','Pemakaian','Berlaku Hingga','Status','Dibuat','Aksi'].map(h=>(
@@ -287,7 +310,8 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
               </tbody>
             </table>
           </div>
-          {totalPages>1&&<div style={{padding:'16px 18px',borderTop:'1px solid rgba(212,43,34,0.05)',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+          <p className="table-scroll-hint">← geser untuk melihat kolom lainnya</p>
+          {totalPages>1&&<div style={{padding:'16px 18px',borderTop:'1px solid rgba(212,43,34,0.05)',display:'flex',alignItems:'center',justifyContent:'center',gap:6,flexWrap:'wrap'}}>
             <button className="page-btn" disabled={currentPage<=1} onClick={()=>goPage(currentPage-1)}><ChevronLeft size={13}/></button>
             {Array.from({length:totalPages},(_,i)=>i+1).filter(p=>p===1||p===totalPages||Math.abs(p-currentPage)<=2)
               .reduce<(number|'...')[]>((acc,p,i,arr)=>{if(i>0&&p-(arr[i-1] as number)>1)acc.push('...');acc.push(p);return acc},[])
@@ -300,12 +324,12 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
 
       {/* MODAL SINGLE */}
       {modal==='single'&&<div className="modal-bg" onClick={()=>setModal(null)} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.85)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-        <div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:'rgba(255,255,255,0.97)',border:'1px solid rgba(212,43,34,0.07)',borderRadius:20,width:'100%',maxWidth:480,overflow:'hidden'}}>
-          <div style={{padding:'18px 22px',borderBottom:'1px solid rgba(212,43,34,0.055)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div className="modal-box vc-modal" onClick={e=>e.stopPropagation()} style={{background:'rgba(255,255,255,0.97)',border:'1px solid rgba(212,43,34,0.07)',borderRadius:20,width:'100%',maxWidth:480,overflow:'hidden'}}>
+          <div className="vc-modal-head" style={{padding:'18px 22px',borderBottom:'1px solid rgba(212,43,34,0.055)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
             <div><h2 style={{color:'#150C09',fontSize:16,fontWeight:700,fontFamily:'Poppins,sans-serif',marginBottom:2}}>Buat Voucher</h2><p style={{color:'rgba(122,98,89,0.8)',fontSize:12}}>Voucher untuk 1 customer</p></div>
-            <button onClick={()=>setModal(null)} style={{width:30,height:30,borderRadius:8,background:'rgba(212,43,34,0.055)',border:'1px solid rgba(212,43,34,0.07)',color:'rgba(122,98,89,0.95)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+            <button onClick={()=>setModal(null)} style={{width:30,height:30,flexShrink:0,borderRadius:8,background:'rgba(212,43,34,0.055)',border:'1px solid rgba(212,43,34,0.07)',color:'rgba(122,98,89,0.95)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
           </div>
-          <div style={{padding:22,display:'flex',flexDirection:'column',gap:18}}>
+          <div className="vc-modal-body" style={{padding:22,display:'flex',flexDirection:'column',gap:18}}>
             {error&&<div style={{padding:'10px 14px',borderRadius:9,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.15)',color:'#B82018',fontSize:12,display:'flex',alignItems:'center',gap:7}}><AlertCircle size={13}/>{error}</div>}
             <div>
               <label className="inp-label">Kode Voucher</label>
@@ -342,10 +366,10 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
                   {form.no_expiry?<ToggleRight size={20} color="#D42B22"/>:<ToggleLeft size={20}/>}Tidak ada batas waktu
                 </button>
               </div>
-              {!form.no_expiry&&<input className="inp" type="date" style={{colorScheme:'dark'}} value={form.valid_until} onChange={e=>setForm(f=>({...f,valid_until:e.target.value}))}/>}
+              {!form.no_expiry&&<input className="inp" type="date" style={{colorScheme:'light'}} value={form.valid_until} onChange={e=>setForm(f=>({...f,valid_until:e.target.value}))}/>}
             </div>
           </div>
-          <div style={{padding:'16px 22px',borderTop:'1px solid rgba(212,43,34,0.055)',display:'flex',gap:10,justifyContent:'flex-end'}}>
+          <div className="vc-modal-foot" style={{padding:'16px 22px',borderTop:'1px solid rgba(212,43,34,0.055)',display:'flex',gap:10,justifyContent:'flex-end',flexWrap:'wrap'}}>
             <button className="btn" onClick={()=>setModal(null)} style={{background:'rgba(212,43,34,0.055)',color:'rgba(74,46,34,0.9)',border:'1px solid rgba(212,43,34,0.08)'}}>Batal</button>
             <button className="btn" onClick={handleCreateSingle} disabled={saving} style={{background:'linear-gradient(135deg,#E83530,#C02018)',color:'#fff',boxShadow:'0 4px 14px rgba(212,43,34,.3)'}}>
               {saving?<><div style={{width:13,height:13,border:'2px solid rgba(122,98,89,0.8)',borderTopColor:'#150C09',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>Menyimpan...</>:<><Ticket size={13}/>Buat Voucher</>}
@@ -356,12 +380,12 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
 
       {/* MODAL BULK */}
       {modal==='bulk'&&<div className="modal-bg" onClick={()=>setModal(null)} style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,.85)',backdropFilter:'blur(12px)',display:'flex',alignItems:'center',justifyContent:'center',padding:20}}>
-        <div className="modal-box" onClick={e=>e.stopPropagation()} style={{background:'rgba(255,255,255,0.97)',border:'1px solid rgba(212,43,34,0.07)',borderRadius:20,width:'100%',maxWidth:480,overflow:'hidden'}}>
-          <div style={{padding:'18px 22px',borderBottom:'1px solid rgba(212,43,34,0.055)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div className="modal-box vc-modal" onClick={e=>e.stopPropagation()} style={{background:'rgba(255,255,255,0.97)',border:'1px solid rgba(212,43,34,0.07)',borderRadius:20,width:'100%',maxWidth:480,overflow:'hidden'}}>
+          <div className="vc-modal-head" style={{padding:'18px 22px',borderBottom:'1px solid rgba(212,43,34,0.055)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
             <div><h2 style={{color:'#150C09',fontSize:16,fontWeight:700,fontFamily:'Poppins,sans-serif',marginBottom:2}}>Generate Massal</h2><p style={{color:'rgba(122,98,89,0.8)',fontSize:12}}>Buat banyak voucher sekaligus</p></div>
-            <button onClick={()=>setModal(null)} style={{width:30,height:30,borderRadius:8,background:'rgba(212,43,34,0.055)',border:'1px solid rgba(212,43,34,0.07)',color:'rgba(122,98,89,0.95)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+            <button onClick={()=>setModal(null)} style={{width:30,height:30,flexShrink:0,borderRadius:8,background:'rgba(212,43,34,0.055)',border:'1px solid rgba(212,43,34,0.07)',color:'rgba(122,98,89,0.95)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
           </div>
-          <div style={{padding:22,display:'flex',flexDirection:'column',gap:18}}>
+          <div className="vc-modal-body" style={{padding:22,display:'flex',flexDirection:'column',gap:18}}>
             {error&&<div style={{padding:'10px 14px',borderRadius:9,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.15)',color:'#B82018',fontSize:12,display:'flex',alignItems:'center',gap:7}}><AlertCircle size={13}/>{error}</div>}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
               <div><label className="inp-label">Jumlah Voucher</label><input className="inp" type="number" min={1} max={500} value={bulk.count} onChange={e=>setBulk(b=>({...b,count:Number(e.target.value)}))}/></div>
@@ -386,7 +410,7 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
                   {bulk.no_expiry?<ToggleRight size={20} color="#D42B22"/>:<ToggleLeft size={20}/>}Tidak ada batas waktu
                 </button>
               </div>
-              {!bulk.no_expiry&&<input className="inp" type="date" style={{colorScheme:'dark'}} value={bulk.valid_until} onChange={e=>setBulk(b=>({...b,valid_until:e.target.value}))}/>}
+              {!bulk.no_expiry&&<input className="inp" type="date" style={{colorScheme:'light'}} value={bulk.valid_until} onChange={e=>setBulk(b=>({...b,valid_until:e.target.value}))}/>}
             </div>
             <div style={{padding:'12px 14px',borderRadius:10,background:'rgba(212,43,34,.06)',border:'1px solid rgba(212,43,34,.12)'}}>
               <p style={{color:'rgba(122,98,89,0.8)',fontSize:10,marginBottom:6,letterSpacing:'1px',textTransform:'uppercase',fontFamily:'Poppins,sans-serif'}}>Contoh kode</p>
@@ -398,7 +422,7 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
               </div>
             </div>
           </div>
-          <div style={{padding:'16px 22px',borderTop:'1px solid rgba(212,43,34,0.055)',display:'flex',gap:10,justifyContent:'flex-end'}}>
+          <div className="vc-modal-foot" style={{padding:'16px 22px',borderTop:'1px solid rgba(212,43,34,0.055)',display:'flex',gap:10,justifyContent:'flex-end',flexWrap:'wrap'}}>
             <button className="btn" onClick={()=>setModal(null)} style={{background:'rgba(212,43,34,0.055)',color:'rgba(74,46,34,0.9)',border:'1px solid rgba(212,43,34,0.08)'}}>Batal</button>
             <button className="btn" onClick={handleCreateBulk} disabled={saving} style={{background:'linear-gradient(135deg,#E83530,#C02018)',color:'#fff',boxShadow:'0 4px 14px rgba(212,43,34,.3)'}}>
               {saving?<><div style={{width:13,height:13,border:'2px solid rgba(122,98,89,0.8)',borderTopColor:'#150C09',borderRadius:'50%',animation:'spin .8s linear infinite'}}/>Generating...</>:<><Sparkles size={13}/>Generate {bulk.count} Voucher</>}
@@ -418,7 +442,7 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
             </div>
           </div>
           <div className="print-area" style={{overflow:'auto',padding:22,flex:1}}>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
+            <div className="print-grid">
               {printCodes.map((code,i)=>(
                 <div key={i} style={{border:'2px dashed rgba(212,43,34,.3)',borderRadius:10,padding:'14px 10px',textAlign:'center',background:'rgba(212,43,34,.05)',position:'relative'}}>
                   <div style={{display:'flex',justifyContent:'center',marginBottom:6}}><Gift size={18} color="rgba(212,43,34,.6)"/></div>

@@ -169,7 +169,7 @@ export default function FramesManager({
   if (view === 'edit-slots' && editingFrame) {
     const expectedSlotsEdit = editingFrame.photo_slots?.length || editingFrame.photo_count
     return (
-      <div style={{ fontFamily:"'Poppins',sans-serif", padding:'28px 32px', maxWidth:1200, margin:'0 auto' }}>
+      <div style={{ fontFamily:"'Poppins',sans-serif", maxWidth:1200, margin:'0 auto' }}>
         <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:22, flexWrap:'wrap' }}>
@@ -226,8 +226,15 @@ export default function FramesManager({
   // ══════════════════════
   if (view === 'create') {
     return (
-      <div style={{ fontFamily:"'Poppins',sans-serif", padding:'28px 32px', maxWidth:1200, margin:'0 auto' }}>
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes fade-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <div style={{ fontFamily:"'Poppins',sans-serif", maxWidth:1200, margin:'0 auto' }}>
+        <style>{`
+          @keyframes spin{to{transform:rotate(360deg)}}
+          @keyframes fade-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+          /* Form di kiri + pratinjau di kanan hanya muat mulai ~940px.
+             Di bawah itu keduanya menumpuk, bukan saling menghimpit. */
+          .fm-create { display:grid; gap:20px; align-items:start; grid-template-columns:minmax(300px,360px) minmax(0,1fr); }
+          @media (max-width:940px){ .fm-create { grid-template-columns:minmax(0,1fr); } }
+        `}</style>
 
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:26 }}>
           <button onClick={()=>{setView('list');resetCreate()}}
@@ -240,7 +247,7 @@ export default function FramesManager({
           </div>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns: preview ? 'minmax(300px,360px) 1fr' : '1fr', gap:20, alignItems:'start' }}>
+        <div className={preview ? 'fm-create' : undefined} style={preview ? undefined : { display:'grid', gridTemplateColumns:'minmax(0,1fr)', gap:20, alignItems:'start' }}>
 
           {/* LEFT — form */}
           <div style={{ background:'rgba(212,43,34,0.04)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:16, padding:24, display:'flex', flexDirection:'column', gap:18 }}>
@@ -406,7 +413,7 @@ export default function FramesManager({
   // VIEW: LIST
   // ══════════════════════
   return (
-    <div style={{ fontFamily:"'Poppins',sans-serif", padding:'28px 32px', maxWidth:1200, margin:'0 auto' }}>
+    <div style={{ fontFamily:"'Poppins',sans-serif", maxWidth:1200, margin:'0 auto' }}>
       <style>{`
         @keyframes fade-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         @keyframes spin{to{transform:rotate(360deg)}}
@@ -440,10 +447,10 @@ export default function FramesManager({
         <div style={{ border:'2px dashed rgba(212,43,34,0.06)', borderRadius:18, padding:'72px 32px', textAlign:'center' }}>
           <ImageIcon size={48} color="rgba(212,43,34,0.08)" style={{margin:'0 auto 16px'}}/>
           <p style={{color:'rgba(158,136,128,0.95)',fontSize:16,fontWeight:500}}>Belum ada frame</p>
-          <p style={{color:'rgba(212,43,34,0.10)',fontSize:13,marginTop:6}}>Klik "Upload Frame" untuk menambahkan</p>
+          <p style={{color:'#9E8880',fontSize:13,marginTop:6}}>Klik "Upload Frame" untuk menambahkan</p>
         </div>
       ) : (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:18 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(min(200px,100%),1fr))', gap:18 }}>
           {frames.map((frame, i) => (
             <div key={frame.id} className="fc"
               style={{ background:'rgba(212,43,34,0.05)', backdropFilter:'blur(20px)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:16, overflow:'hidden', boxShadow:'0 4px 14px rgba(0,0,0,.28)', position:'relative', animation:'fade-up .35s ease both', animationDelay:`${i*.04}s` }}>

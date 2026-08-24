@@ -138,7 +138,7 @@ export default function LoginPage() {
       `}</style>
 
       <div style={{
-        minHeight: '100vh', display: 'flex', position: 'relative', overflow: 'hidden',
+        minHeight: '100dvh', display: 'flex', position: 'relative', overflow: 'hidden',
         background: '#FAF7F5',
         fontFamily: "'Poppins', sans-serif",
       }}>

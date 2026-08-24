@@ -80,12 +80,19 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
         .table-row:hover { background: rgba(212,43,34,0.03); }
         .modal-overlay { animation: fade-in 0.2s ease both; }
         .modal-card { animation: fade-up 0.3s ease both; }
+
+        /* Modal: dibatasi tinggi layar, isinya yang menggulir. */
+        .cm-modal { max-height:min(90vh,90dvh); display:flex; flex-direction:column; }
+        .cm-modal-body { overflow-y:auto; flex:1; min-height:0; }
+        @media (max-width: 520px) { .cm-modal { padding:24px 20px !important; border-radius:20px !important; } }
       `}</style>
 
-      <div style={{ fontFamily:"'Poppins',sans-serif", minHeight:'100vh', padding:'32px 36px' }}>
+      {/* Padding halaman datang dari .dashboard-main — jangan ditambah lagi
+          di sini, dulu jadi dobel dan konten terhimpit. */}
+      <div style={{ fontFamily:"'Poppins',sans-serif" }}>
 
         {/* Header */}
-        <div className="page-anim" style={{ marginBottom:'32px', display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
+        <div className="page-anim" style={{ marginBottom:'32px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', flexWrap:'wrap', gap:'14px' }}>
           <div>
             <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'6px' }}>
               <div style={{ width:'3px', height:'20px', borderRadius:'2px', background:'linear-gradient(to bottom,#E83530,#D42B22)' }} />
@@ -104,7 +111,7 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
             display:'flex', alignItems:'center', gap:'8px',
             background:'linear-gradient(135deg,#E83530,#C02018)',
             border:'none', borderRadius:'12px', padding:'11px 20px',
-            color:'#150C09', fontSize:'13px', fontWeight:600, cursor:'pointer',
+            color:'#fff', fontSize:'13px', fontWeight:600, cursor:'pointer',
             boxShadow:'0 4px 16px rgba(212,43,34,0.35)',
             fontFamily:"'Poppins',sans-serif",
           }}>
@@ -128,8 +135,8 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
             <h2 style={{ color:'#150C09', fontSize:'15px', fontWeight:600, fontFamily:'Poppins,sans-serif' }}>Daftar Client</h2>
           </div>
 
-          <div style={{ overflowX:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+          <div className="pk-table-wrap">
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:900 }}>
               <thead>
                 <tr style={{ borderBottom:'1px solid rgba(212,43,34,0.04)' }}>
                   {['Nama Bisnis','Email','No. HP','Perangkat','Admin','Status','Bergabung','Aksi'].map(h => (
@@ -206,6 +213,7 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
               </tbody>
             </table>
           </div>
+          <p className="table-scroll-hint">← geser untuk melihat kolom lainnya</p>
         </div>
       </div>
 
@@ -217,7 +225,7 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
           backdropFilter:'blur(8px)',
           display:'flex', alignItems:'center', justifyContent:'center', padding:'20px',
         }}>
-          <div className="modal-card" style={{
+          <div className="modal-card cm-modal" style={{
             width:'100%', maxWidth:'460px',
             background:'#FFFFFF',
             border:'1px solid rgba(212,43,34,0.10)',
@@ -244,7 +252,7 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
             </div>
 
             {/* Form */}
-            <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
+            <div className="cm-modal-body" style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
               {/* Nama Bisnis */}
               <div>
                 <label style={{ color:'rgba(122,98,89,0.88)', fontSize:'11px', fontWeight:600, letterSpacing:'1px', textTransform:'uppercase', display:'block', marginBottom:'8px', fontFamily:'Poppins,sans-serif' }}>
@@ -324,7 +332,7 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
 
               {/* Info */}
               <div style={{ background:'rgba(212,43,34,0.08)', border:'1px solid rgba(212,43,34,0.15)', borderRadius:'10px', padding:'12px 14px' }}>
-                <p style={{ color:'rgba(165,180,252,0.8)', fontSize:'12px', lineHeight:1.6 }}>
+                <p style={{ color:'#7A6259', fontSize:'12px', lineHeight:1.6 }}>
                   ℹ️ Sistem akan otomatis membuat akun Supabase Auth dan menghubungkannya ke bisnis ini sebagai <strong>Admin</strong>.
                 </p>
               </div>

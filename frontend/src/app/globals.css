@@ -116,9 +116,48 @@ h1, h2, h3, h4 {
 .fade-in-3 { animation: fadeInUp 0.4s ease 0.15s forwards; opacity: 0; }
 .fade-in-4 { animation: fadeInUp 0.4s ease 0.2s  forwards; opacity: 0; }
 
-/* ══════════════════════════════════════════════════════════════
-   MOBILE — perbaikan keterbacaan dashboard di layar sempit
-   ══════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   LAYOUT RESPONSIF
+   Breakpoint yang dipakai konsisten di seluruh dashboard:
+     ≤ 900px  → sidebar jadi drawer + topbar (lihat Sidebar.tsx)
+     ≤ 1100px → grid kartu dirapatkan
+     ≤ 768px  → penyesuaian tipografi & target sentuh
+     ≤ 520px  → satu kolom penuh
+   ════════════════════════════════════════════════════════════ */
+
+/* Lebar sidebar dipakai bersama Sidebar.tsx dan margin konten utama —
+   satu sumber kebenaran supaya keduanya tidak pernah selisih lagi. */
+:root { --pk-sidebar-w: 248px; }
+
+/* Media tidak pernah melebihi lebar kolomnya. */
+img, svg, video, canvas { max-width: 100%; }
+
+/* Wadah tabel: menggulir sendiri tanpa mendorong lebar halaman. */
+.pk-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+/* Baris HWID di panel debug super admin. */
+.hwid-row { display: flex; align-items: center; gap: 12px; }
+.hwid-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.hwid-row-meta { flex-shrink: 0; text-align: right; display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 700px) {
+  /* Stempel waktu turun ke baris sendiri: sebelumnya memaksa baris melebar
+     sehingga HWID terdorong keluar layar. */
+  .hwid-row { flex-wrap: wrap; row-gap: 8px; }
+  .hwid-row-main { flex-basis: calc(100% - 60px); }
+  .hwid-row-meta {
+    order: 3; flex-basis: 100%; text-align: left;
+    flex-direction: row; flex-wrap: wrap; gap: 4px 14px;
+  }
+}
+
+
+/* ════════════════════════════════════════════════════════════
+   MOBILE — keterbacaan dashboard di layar sempit
+   ════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
   /* Tabel tetap boleh menggulir horizontal, tapi jangan sampai satu sel
      memaksa lebar berlebihan sehingga sebagian besar kolom tersembunyi. */
@@ -128,9 +167,11 @@ h1, h2, h3, h4 {
   /* Kartu/panel: kurangi padding besar khas desktop agar konten dapat ruang. */
   .glass { padding: 16px !important; border-radius: 14px !important; }
 
-  /* Judul halaman tidak perlu sebesar di desktop. */
-  h1 { font-size: 22px !important; line-height: 1.2 !important; }
-  h2 { font-size: 17px !important; }
+  /* Judul halaman dashboard tidak perlu sebesar di desktop. Dibatasi ke
+     .dashboard-main supaya tidak ikut mengecilkan judul hero di halaman
+     download pelanggan, yang sudah punya clamp() sendiri. */
+  .dashboard-main h1 { font-size: 22px !important; line-height: 1.2 !important; }
+  .dashboard-main h2 { font-size: 17px !important; }
 
   /* Semua kontrol memenuhi target sentuh yang nyaman. */
   button, .dl-btn, select, input[type="text"], input[type="number"],
@@ -145,6 +186,6 @@ h1, h2, h3, h4 {
 /* Beri tahu bahwa tabel bisa digulir, alih-alih terlihat terpotong begitu saja. */
 .table-scroll-hint {
   font-size: 11px; color: #9E8880; font-family: 'Poppins', sans-serif;
-  padding: 6px 2px 0; display: none;
+  padding: 8px 16px 12px; display: none;
 }
 @media (max-width: 768px) { .table-scroll-hint { display: block; } }

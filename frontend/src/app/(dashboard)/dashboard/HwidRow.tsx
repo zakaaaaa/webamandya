@@ -32,8 +32,7 @@ export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
   const badgeColor= isActive ? '#059669'               : (!isRegistered ? '#D97706'               : '#B82018')
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 12,
+    <div className="hwid-row" style={{
       padding: '10px 14px',
       background: bg,
       border: `1px solid ${border}`,
@@ -43,7 +42,7 @@ export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
       <div style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
 
       {/* HWID & Name info */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="hwid-row-main">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ color: '#150C09', fontSize: 13, fontWeight: 700, fontFamily: "'Poppins',sans-serif" }}>
             {deviceName}
@@ -65,7 +64,7 @@ export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
       </div>
 
       {/* Timestamps */}
-      <div style={{ flexShrink: 0, textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <div className="hwid-row-meta">
         <span style={{ fontSize: 10, color: '#C0AFA9', whiteSpace: 'nowrap' }}>
           Pertama: {formatDate(firstSeen)}
         </span>

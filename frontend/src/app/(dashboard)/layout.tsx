@@ -41,21 +41,42 @@ export default async function DashboardLayout({ children }: { children: React.Re
         }
         .table-row:hover { background:rgba(212,43,34,0.03); }
 
-        /* ── MAIN CONTENT ── */
+        /* ── MAIN CONTENT ──
+           margin-left mengikuti --pk-sidebar-w (globals.css) supaya tidak
+           pernah lagi selisih dengan lebar sidebar dan menimpa konten. */
         .dashboard-main {
           flex: 1;
+          min-width: 0;
           min-height: 100vh;
+          min-height: 100dvh;
           position: relative;
           z-index: 10;
-          margin-left: 240px;
+          margin-left: var(--pk-sidebar-w);
           padding: 32px 36px;
         }
 
-        @media (max-width: 768px) {
+        /* Laptop kecil / tablet lanskap: sidebar tetap ada, padding dirampingkan
+           supaya kolom konten tidak tersisa sempit. */
+        @media (max-width: 1200px) {
+          .dashboard-main { padding: 28px 24px; }
+        }
+
+        /* Di bawah 900px sidebar berubah jadi drawer (Sidebar.tsx): konten
+           memakai lebar penuh, dengan ruang untuk topbar setinggi 58px. */
+        @media (max-width: 900px) {
           .dashboard-main {
             margin-left: 0;
-            /* 58px topbar + jarak nyaman; tidak ada lagi bottom nav */
-            padding: 74px 14px 32px;
+            padding-top: 74px;
+            padding-bottom: 32px;
+            padding-left: max(16px, env(safe-area-inset-left));
+            padding-right: max(16px, env(safe-area-inset-right));
+          }
+        }
+
+        @media (max-width: 480px) {
+          .dashboard-main {
+            padding-left: max(12px, env(safe-area-inset-left));
+            padding-right: max(12px, env(safe-area-inset-right));
           }
         }
       `}</style>
