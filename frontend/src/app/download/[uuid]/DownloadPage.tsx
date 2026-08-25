@@ -323,30 +323,64 @@ export default function DownloadPage({
     }
   }
 
+  // ── Unduhan ────────────────────────────────────────────────────────────
+  // Berkas hasil ada di CDN R2 (domain berbeda dari halaman ini), jadi
+  // membacanya lewat fetch butuh izin CORS. Aturan CORS-nya sudah dipasang
+  // di bucket, TAPI objek yang terlanjur di-cache Cloudflare sebelum itu
+  // masih disajikan tanpa header CORS — dan permintaan seperti itu ditolak
+  // browser tanpa suara. Dulu kegagalannya cuma masuk console.error,
+  // sehingga tombolnya terlihat "berputar lalu tidak terjadi apa-apa".
+  const saveBlob = (blob:Blob, filename:string) => {
+    const href = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = href
+    a.download = filename
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // Jangan dilepas seketika: sebagian browser membatalkan unduhan yang
+    // baru saja dimulai kalau URL objeknya langsung dicabut.
+    setTimeout(() => URL.revokeObjectURL(href), 60000)
+  }
+
+  const fetchBlob = async (url:string) => {
+    const res = await fetch(url, { mode:'cors' })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.blob()
+  }
+
+  /** Kembalikan true kalau berkas benar-benar tersimpan sebagai unduhan. */
+  const downloadOne = async (url:string, filename:string) => {
+    try {
+      saveBlob(await fetchBlob(url), filename)
+      return true
+    } catch {
+      // Percobaan kedua dengan pemecah cache: memaksa Cloudflare mengambil
+      // ulang dari R2, dan salinan segar itu selalu membawa header CORS.
+      try {
+        const sep = url.includes('?') ? '&' : '?'
+        saveBlob(await fetchBlob(`${url}${sep}cb=${Date.now()}`), filename)
+        return true
+      } catch {
+        // Pilihan terakhir: buka berkasnya supaya pelanggan masih bisa
+        // menyimpannya manual, alih-alih dibiarkan menatap spinner.
+        window.open(url, '_blank', 'noopener')
+        return false
+      }
+    }
+  }
+
   const handleDownload = async (url:string, filename:string, key:string) => {
     setDownloading(key)
-    try {
-      const res  = await fetch(url)
-      const blob = await res.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob); a.download = filename; a.click()
-      URL.revokeObjectURL(a.href)
-    } catch(e) { console.error(e) }
-    setTimeout(()=>setDownloading(null), 1200)
+    await downloadOne(url, filename)
+    setTimeout(()=>setDownloading(null), 800)
   }
 
   const downloadAllPhotos = async () => {
     setDownloading('all-photos')
     for (let i = 0; i < photos.length; i++) {
-      try {
-        const res  = await fetch(photos[i].photo_url)
-        const blob = await res.blob()
-        const a = document.createElement('a')
-        a.href = URL.createObjectURL(blob)
-        a.download = `foto_${i+1}_${uuid.slice(0,8)}.jpg`
-        a.click()
-        URL.revokeObjectURL(a.href)
-      } catch(e) { console.error(e) }
+      await downloadOne(photos[i].photo_url, `foto_${i+1}_${uuid.slice(0,8)}.jpg`)
       await new Promise(r => setTimeout(r, 350))
     }
     setDownloading(null)
