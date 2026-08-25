@@ -20,7 +20,13 @@ const smtpSiap = Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
 // Gmail menolak email di atas 25MB dan Resend di atas 40MB. Sisakan ruang
 // untuk overhead base64 (~33%) — di atas ambang ini aset hanya dikirim
 // sebagai tautan, bukan lampiran.
-const BUDGET_LAMPIRAN = 15 * 1024 * 1024;
+const BUDGET_LAMPIRAN = 12 * 1024 * 1024;
+
+// Batas per berkas. Upstream VPS ini hanya ~28 KB/detik saat mengirim SMTP:
+// satu strip PNG 8,55MB pernah membuat emailnya baru sampai setelah 6 menit,
+// sementara kelima fotonya cuma 0,28MB masing-masing. Berkas gemuk lebih baik
+// jadi tautan — pratinjaunya toh sudah tampil di badan email.
+const BATAS_PER_BERKAS = 4 * 1024 * 1024;
 
 // Video sengaja tidak pernah dilampirkan: ukurannya paling besar dan hampir
 // selalu membuat email ditolak. Tautannya tetap disertakan.
@@ -36,6 +42,11 @@ function getTransporter() {
       port: SMTP_PORT,
       secure: SMTP_PORT === 465,
       auth: { user: SMTP_USER, pass: SMTP_PASS },
+      // Tanpa batas waktu, koneksi yang menggantung menyandera pengaduan
+      // sampai pemulihan klaim basi 10 menit menyapunya.
+      connectionTimeout: 20000,
+      greetingTimeout: 20000,
+      socketTimeout: 5 * 60 * 1000,
     });
   }
   return transporter;
@@ -85,7 +96,7 @@ async function siapkanLampiran(aset, kodeSesi) {
   for (const item of antre) {
     try {
       const buf = await unduh(item.url);
-      if (total + buf.length > BUDGET_LAMPIRAN) {
+      if (buf.length > BATAS_PER_BERKAS || total + buf.length > BUDGET_LAMPIRAN) {
         gagal.push(item.filename);
         continue;
       }
