@@ -5,8 +5,22 @@
 // mesin gagal mengunggah), pekerja latar akan mencoba lagi berkala sampai
 // berkasnya muncul — lihat src/workers/pengirim.js.
 
+const fs = require('fs');
+const path = require('path');
 const { supabase } = require('../middleware/validateDevice');
 const { sendMessage, esc } = require('./telegram');
+
+// Gambar di email TIDAK diambil dari jarak jauh, melainkan ditempel inline
+// (cid). Dua alasan yang sudah terbukti di Gmail:
+//   1. Logo situs berformat WebP — Gmail tidak mendukungnya sama sekali.
+//   2. Photo strip aslinya PNG ~9MB; proxy gambar Gmail menolak berkas
+//      sebesar itu, jadi kotaknya kosong.
+// Versi inline kebal proxy, kebal pemblokiran gambar, dan formatnya kita
+// yang tentukan.
+const LOGO_PATH = path.join(__dirname, '..', '..', 'assets', 'logo-pk.jpg');
+const CID_LOGO = 'logo-pk@pabrikenangan';
+const CID_STRIP = 'strip-preview@pabrikenangan';
+const LEBAR_PRATINJAU = 600;
 
 const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
@@ -92,10 +106,12 @@ async function siapkanLampiran(aset, kodeSesi) {
   const lampiran = [];
   const gagal = [];
   let total = 0;
+  let stripBuf = null; // disimpan untuk pratinjau, walau terlalu besar dilampirkan
 
   for (const item of antre) {
     try {
       const buf = await unduh(item.url);
+      if (item.url === aset.strip) stripBuf = buf;
       if (buf.length > BATAS_PER_BERKAS || total + buf.length > BUDGET_LAMPIRAN) {
         gagal.push(item.filename);
         continue;
@@ -107,7 +123,22 @@ async function siapkanLampiran(aset, kodeSesi) {
       gagal.push(item.filename);
     }
   }
-  return { lampiran, total, gagal };
+  return { lampiran, total, gagal, stripBuf };
+}
+
+/** Kecilkan strip jadi pratinjau ringan yang aman ditempel di email. */
+async function buatPratinjau(stripBuf) {
+  if (!stripBuf) return null;
+  try {
+    const sharp = require('sharp');
+    return await sharp(stripBuf)
+      .resize({ width: LEBAR_PRATINJAU, withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+  } catch (e) {
+    console.error('[Kirim] Gagal membuat pratinjau strip:', e.message);
+    return null;
+  }
 }
 
 const tombol = (href, teks) =>
@@ -117,7 +148,7 @@ const tombol = (href, teks) =>
 const tautan = (href, teks) =>
   `<a href="${href}" style="color:#C02018;text-decoration:underline">${teks}</a>`;
 
-function susunEmail({ aset, kodeSesi, waktuSesi, halamanUnduh, adaLampiran }) {
+function susunEmail({ aset, kodeSesi, waktuSesi, halamanUnduh, adaLampiran, adaPratinjau }) {
   const daftar = [];
   if (aset.strip) daftar.push(`<li style="margin-bottom:6px">Photo strip — ${tautan(aset.strip, 'unduh')}</li>`);
   if (aset.foto.length) {
@@ -130,7 +161,7 @@ function susunEmail({ aset, kodeSesi, waktuSesi, halamanUnduh, adaLampiran }) {
   const html = `
 <div style="margin:0;padding:24px 12px;background:#FAF7F5;font-family:'Helvetica Neue',Arial,sans-serif">
   <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid rgba(212,43,34,0.12);border-radius:18px;padding:28px 24px">
-    <img src="https://www.pabrikenangan.my.id/logo-pk.webp" alt="Pabrik Kenangan" width="150"
+    <img src="cid:${CID_LOGO}" alt="Pabrik Kenangan" width="150"
          style="display:block;margin:0 auto 22px;max-width:150px;height:auto">
 
     <h1 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#150C09;text-align:center">
@@ -140,8 +171,8 @@ function susunEmail({ aset, kodeSesi, waktuSesi, halamanUnduh, adaLampiran }) {
       Sesi ${esc(waktuSesi)}
     </p>
 
-    ${aset.strip ? `<div style="text-align:center;margin-bottom:22px">
-      <img src="${aset.strip}" alt="Photo strip" width="220"
+    ${adaPratinjau ? `<div style="text-align:center;margin-bottom:22px">
+      <img src="cid:${CID_STRIP}" alt="Photo strip" width="220"
            style="max-width:220px;height:auto;border-radius:12px;border:1px solid rgba(212,43,34,0.12)">
     </div>` : ''}
 
@@ -201,9 +232,23 @@ async function kirimHasilSesi({ session, tujuan, kodeSesi }) {
     dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Jakarta',
   });
 
-  const { lampiran, total, gagal } = await siapkanLampiran(aset, kodeSesi);
+  const { lampiran, total, gagal, stripBuf } = await siapkanLampiran(aset, kodeSesi);
+
+  // Gambar yang tampil di badan email: logo + pratinjau strip, keduanya
+  // ditempel inline supaya tidak bergantung pada proxy gambar klien email.
+  const inline = [];
+  if (fs.existsSync(LOGO_PATH)) {
+    inline.push({ filename: 'logo-pk.jpg', path: LOGO_PATH, cid: CID_LOGO });
+  }
+  const pratinjau = await buatPratinjau(stripBuf);
+  if (pratinjau) {
+    inline.push({ filename: 'photostrip-preview.jpg', content: pratinjau, cid: CID_STRIP });
+  }
+
   const { html, teks } = susunEmail({
-    aset, kodeSesi, waktuSesi, halamanUnduh, adaLampiran: lampiran.length > 0,
+    aset, kodeSesi, waktuSesi, halamanUnduh,
+    adaLampiran: lampiran.length > 0,
+    adaPratinjau: Boolean(pratinjau),
   });
 
   try {
@@ -213,7 +258,7 @@ async function kirimHasilSesi({ session, tujuan, kodeSesi }) {
       subject: 'Hasil foto kamu — Pabrik Kenangan',
       text: teks,
       html,
-      attachments: lampiran,
+      attachments: [...inline, ...lampiran],
     });
   } catch (e) {
     console.error(`[Kirim] Gagal mengirim ke ${tujuan}: ${e.message}`);
