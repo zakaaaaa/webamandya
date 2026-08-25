@@ -17,6 +17,10 @@ app.use('/api/photobooth/upload',  require('./routes/upload'));
 app.use('/api/photobooth/photos',  require('./routes/photos'));
 app.use('/api/photobooth/email',   require('./routes/email'));
 app.use('/api/complaints',         require('./routes/complaints'));
+
+// Pekerja latar: mengantar hasil ke pelanggan yang sudah melapor, dan
+// mencoba lagi berkala selama berkasnya belum sampai server.
+require('./workers/pengirim').mulai();
 app.use('/api/payment',            require('./routes/payment'));
 app.use('/api/frames',             require('./routes/frames'));
 app.use('/download', require('./routes/download'));

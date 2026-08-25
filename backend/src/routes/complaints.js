@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../middleware/validateDevice');
 const { sendMessage, esc } = require('../utils/telegram');
+const { cobaSegera } = require('../workers/pengirim');
 
 // Endpoint publik: dipanggil langsung dari browser pelanggan di halaman
 // unduh, tanpa login dan tanpa HWID. Karena itu semua masukan diperlakukan
@@ -176,6 +177,11 @@ router.post('/', async (req, res) => {
     // walau notifikasinya gagal. Jangan bikin pelanggan mengulang.
     console.warn('[Complaint] Notifikasi Telegram gagal untuk', complaint.id);
   }
+
+  // Coba antar sekarang juga, tanpa menunggu putaran pekerja berikutnya.
+  // Sengaja tidak di-await: pelanggan tidak perlu menunggu unggahan lampiran
+  // selesai hanya untuk tahu laporannya diterima.
+  cobaSegera(complaint.id);
 
   return res.status(201).json({
     success: true,
