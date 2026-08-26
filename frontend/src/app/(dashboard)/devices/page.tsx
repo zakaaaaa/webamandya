@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import DevicesManager from './DevicesManager'
+import ConsumablesPanel from './ConsumablesPanel'
 
 export default async function DevicesPage() {
   const supabase = await createServerSupabaseClient()
@@ -24,17 +25,35 @@ export default async function DevicesPage() {
 
   const { data: devices } = await devicesQuery
 
+  // Bahan habis pakai (kertas & tinta). Barisnya bisa belum ada untuk
+  // perangkat yang baru didaftarkan — backend membuatnya saat laporan pertama
+  // masuk, jadi di sini cukup ditampilkan yang sudah ada.
+  const deviceIds = (devices ?? []).map(d => d.id)
+  const { data: consumables } = deviceIds.length
+    ? await supabase.from('device_consumables').select('*').in('device_id', deviceIds)
+    : { data: [] }
+
   // Ambil clients untuk dropdown (super admin only)
   const { data: clients } = isSuperAdmin
     ? await supabase.from('clients').select('id, name').eq('is_active', true).order('name')
     : { data: [] }
 
   return (
-    <DevicesManager
-      initialDevices={devices ?? []}
-      clients={clients ?? []}
-      isSuperAdmin={isSuperAdmin}
-      myClientId={adminUser?.client_id ?? null}
-    />
+    <>
+      <ConsumablesPanel
+        devices={(devices ?? []).map(d => ({
+          id: d.id,
+          device_name: d.device_name,
+          clients: d.clients,
+        }))}
+        initial={consumables ?? []}
+      />
+      <DevicesManager
+        initialDevices={devices ?? []}
+        clients={clients ?? []}
+        isSuperAdmin={isSuperAdmin}
+        myClientId={adminUser?.client_id ?? null}
+      />
+    </>
   )
 }

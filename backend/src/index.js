@@ -15,6 +15,7 @@ app.use('/api/photobooth/license', require('./routes/license'));
 app.use('/api/photobooth/session', require('./routes/session'));
 app.use('/api/photobooth/upload',  require('./routes/upload'));
 app.use('/api/photobooth/photos',  require('./routes/photos'));
+app.use('/api/photobooth/consumables', require('./routes/consumables'));
 app.use('/api/photobooth/email',   require('./routes/email'));
 app.use('/api/complaints',         require('./routes/complaints'));
 
