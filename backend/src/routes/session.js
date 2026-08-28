@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
+const { v4: uuidv4 } = require('uuid');
 const { supabase, validateDevice } = require('../middleware/validateDevice');
 const { resolveSettings } = require('../utils/settings');
+const { generateSignatureGet, getTimestamp } = require('../utils/doku');
+
+const DOKU_BASE_URL = process.env.DOKU_BASE_URL || 'https://api.doku.com';
 
 // POST /api/photobooth/session/start  (dipanggil startSession() Flutter)
 //
@@ -235,6 +240,103 @@ router.patch('/media-status', validateDevice, async (req, res) => {
   }
 
   return res.json({ success: true, ...patch });
+});
+
+
+// POST /api/photobooth/session/abandon  (dipanggil abandonSession() Flutter)
+//
+// Dipanggil ketika alur pembayaran QRIS berakhir TANPA pembayaran: link gagal
+// dibuat, pelanggan menekan "Batalkan", atau halaman pembayaran ditutup.
+//
+// Kenapa perlu: baris sesi ditulis SEBELUM order DOKU dibuat (route /start di
+// atas), jadi setiap pembatalan meninggalkan baris 'pending' yang tidak pernah
+// tertutup. Pada audit 2026-08-28, 74 dari 109 sesi pending berasal dari sini
+// dan tidak punya jejak apa pun di DOKU.
+//
+// Endpoint ini TIDAK pernah memutuskan sendiri bahwa sesi batal — DOKU ditanya
+// lebih dulu, supaya pembayaran yang webhook-nya belum sampai tidak ikut
+// ditutup. Kalau DOKU tidak bisa dihubungi, sesi sengaja DIBIARKAN 'pending':
+// lebih baik satu baris menggantung daripada menandai batal sesuatu yang
+// ternyata sudah dibayar.
+router.post('/abandon', validateDevice, async (req, res) => {
+  const { transaction_code } = req.body;
+  const { id: device_id } = req.device;
+
+  if (!transaction_code) {
+    return res.status(400).json({ success: false, message: 'transaction_code wajib diisi.', code: 'MISSING_TRANSACTION_CODE' });
+  }
+
+  try {
+    // Dibatasi ke perangkat pemilik sesi — satu unit tidak boleh menutup sesi unit lain.
+    const { data: session } = await supabase
+      .from('sessions')
+      .select('id, payment_status, clients(doku_client_id, doku_secret_key)')
+      .eq('transaction_code', transaction_code)
+      .eq('device_id', device_id)
+      .maybeSingle();
+
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Sesi tidak ditemukan.', code: 'SESSION_NOT_FOUND' });
+    }
+
+    // Idempoten: sesi yang sudah lunas/gratis/tertutup tidak pernah diubah.
+    if (session.payment_status !== 'pending') {
+      return res.status(200).json({ success: true, status: session.payment_status, changed: false });
+    }
+
+    const tutup = async (status, extra = {}) => {
+      await supabase.from('sessions').update({ payment_status: status, ...extra }).eq('id', session.id);
+      return res.status(200).json({ success: true, status, changed: true });
+    };
+
+    const { doku_client_id, doku_secret_key } = session.clients || {};
+
+    // Tanpa kredensial DOKU tidak ada order yang mungkin dibayar.
+    if (!doku_client_id || !doku_secret_key) {
+      console.log('[Session] Abandon', transaction_code, '- klien tanpa kredensial DOKU, ditutup sebagai expired.');
+      return tutup('expired');
+    }
+
+    const targetPath = `/orders/v1/status/${transaction_code}`;
+    const requestId = uuidv4();
+    const timestamp = getTimestamp();
+
+    try {
+      const dokuResponse = await axios.get(`${DOKU_BASE_URL}${targetPath}`, {
+        headers: {
+          'Client-Id': doku_client_id,
+          'Request-Id': requestId,
+          'Request-Timestamp': timestamp,
+          'Signature': generateSignatureGet(doku_client_id, doku_secret_key, requestId, timestamp, targetPath),
+        },
+        timeout: 10000,
+      });
+
+      if (dokuResponse.data?.transaction?.status === 'SUCCESS') {
+        console.log('[Session] Abandon dibatalkan —', transaction_code, 'ternyata SUDAH DIBAYAR.');
+        return tutup('paid', { paid_at: new Date().toISOString() });
+      }
+
+      console.log('[Session] Abandon', transaction_code, '- order ada tapi belum dibayar, ditutup sebagai expired.');
+      return tutup('expired');
+
+    } catch (error) {
+      // 404 = order tidak pernah dibuat di DOKU. Justru kasus yang paling sering:
+      // /payment/generate gagal atau tidak pernah dipanggil. Aman ditutup.
+      if (error?.response?.status === 404) {
+        console.log('[Session] Abandon', transaction_code, '- tidak ada order di DOKU, ditutup sebagai expired.');
+        return tutup('expired');
+      }
+
+      // Selain itu (jaringan/5xx): tidak bisa membuktikan sesi belum dibayar.
+      console.error('[Session] Abandon', transaction_code, '- DOKU tidak bisa dihubungi, sesi dibiarkan pending:', error?.response?.data || error.message);
+      return res.status(200).json({ success: true, status: 'pending', changed: false });
+    }
+
+  } catch (e) {
+    console.error('[Session] Abandon error:', e);
+    return res.status(500).json({ success: false, message: 'Server error.', code: 'SERVER_ERROR' });
+  }
 });
 
 module.exports = router;
