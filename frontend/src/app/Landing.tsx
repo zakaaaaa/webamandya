@@ -374,7 +374,8 @@ export default function Landing() {
           </div>
           <div className="col">
             <b>Lain-lain</b>
-            <a href="/login">Masuk dasbor</a>
+            {/* Langsung ke app supaya tidak singgah di pengalihan www -> app. */}
+            <a href="https://app.pabrikenangan.my.id/login">Masuk dasbor</a>
             <a href="#tanya">Tanya jawab</a>
           </div>
           <div className="end">
