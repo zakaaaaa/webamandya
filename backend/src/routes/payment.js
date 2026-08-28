@@ -158,6 +158,7 @@ router.post('/check-status', async (req, res) => {
     });
 
     const txStatus = dokuResponse.data?.transaction?.status;
+    const orderStatus = dokuResponse.data?.order?.status;
 
     if (txStatus === 'SUCCESS') {
       await supabase
@@ -169,7 +170,28 @@ router.post('/check-status', async (req, res) => {
       return res.status(200).json({ status: 'paid' });
     }
 
-    return res.status(200).json({ status: session.payment_status, doku_status: txStatus || null });
+    // PENTING: untuk QRIS yang tidak jadi dibayar, DOKU TIDAK pernah mengubah
+    // transaction.status — nilainya tetap 'PENDING' selamanya. Yang berubah
+    // adalah order.status menjadi 'ORDER_EXPIRED'. Kalau hanya transaction.status
+    // yang dibaca, sesi tidak pernah keluar dari 'pending' dan menumpuk di
+    // dashboard (terbukti: 23 order ORDER_EXPIRED masih tercatat pending).
+    const kedaluwarsa =
+      orderStatus === 'ORDER_EXPIRED' ||
+      txStatus === 'EXPIRED' ||
+      txStatus === 'FAILED';
+
+    if (kedaluwarsa) {
+      const statusBaru = txStatus === 'FAILED' ? 'failed' : 'expired';
+      await supabase
+        .from('sessions')
+        .update({ payment_status: statusBaru })
+        .eq('id', session.id);
+
+      console.log(`[Payment] Sesi ${session_uuid} ditutup sebagai ${statusBaru} (order=${orderStatus}, transaction=${txStatus}).`);
+      return res.status(200).json({ status: statusBaru, doku_status: txStatus || null, order_status: orderStatus || null });
+    }
+
+    return res.status(200).json({ status: session.payment_status, doku_status: txStatus || null, order_status: orderStatus || null });
   } catch (error) {
     // Kalau DOKU tidak bisa dihubungi, jangan gagalkan polling —
     // kembalikan status terakhir yang tersimpan supaya app tetap menunggu.
@@ -208,12 +230,21 @@ router.post('/notification', async (req, res) => {
     const txStatus = req.body?.transaction?.status;
 
     if (txStatus === 'SUCCESS') {
+      // paid_at wajib diisi di sini juga: jalur polling mengisinya, jalur webhook
+      // dulu tidak, sehingga 27 dari 33 sesi lunas tidak punya waktu bayar.
       await supabase
         .from('sessions')
-        .update({ payment_status: 'paid' })
+        .update({ payment_status: 'paid', paid_at: new Date().toISOString() })
         .eq('transaction_code', invoiceNumber);
 
       console.log('[Webhook] ✅ Payment marked as PAID for:', invoiceNumber);
+    } else if (txStatus === 'EXPIRED' || txStatus === 'FAILED') {
+      await supabase
+        .from('sessions')
+        .update({ payment_status: txStatus === 'FAILED' ? 'failed' : 'expired' })
+        .eq('transaction_code', invoiceNumber);
+
+      console.log(`[Webhook] Sesi ${invoiceNumber} ditandai ${txStatus}.`);
     }
 
     return res.status(200).send('OK');
