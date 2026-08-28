@@ -2,6 +2,13 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function proxy(request: NextRequest) {
+  // Root "/" adalah halaman sewa photobooth untuk umum, bukan bagian dasbor.
+  // Tanpa pengecualian ini pengunjung yang belum masuk langsung dilempar ke
+  // /login dan halaman jualannya tidak pernah terlihat.
+  if (request.nextUrl.pathname === '/') {
+    return NextResponse.next()
+  }
+
   if (request.nextUrl.pathname.startsWith('/download')) {
     return NextResponse.next()
   }
