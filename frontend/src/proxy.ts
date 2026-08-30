@@ -21,6 +21,10 @@ const APP = 'app.pabrikenangan.my.id'
  *   /download/[uuid] - tautan QR yang dipindai tamu di acara. Cetakan dan QR
  *                      yang sudah beredar menunjuk ke www; memindahkannya
  *                      akan mematikan tautan yang sudah tersebar.
+ *   /antri/[slug]    - antrean pelanggan, dipindai dari QR di standee CETAK.
+ *                      Alasannya sama dan lebih keras: standee tidak bisa
+ *                      diralat setelah masuk percetakan, jadi path ini harus
+ *                      tetap publik dan tetap di www selamanya.
  *   /api/*           - dipanggil dari sisi klien pada origin-nya sendiri.
  */
 const DASBOR = new Set([
@@ -50,6 +54,13 @@ export async function proxy(request: NextRequest) {
 
   // Galeri hasil yang dibuka tamu lewat QR: tanpa login.
   if (pathname.startsWith('/download')) {
+    return NextResponse.next()
+  }
+
+  // Antrean pelanggan yang dipindai dari standee: tanpa login. Termasuk
+  // /antri/[slug]/operator, yang dijaga PIN-nya sendiri, bukan sesi Supabase —
+  // operator berdiri di booth dengan HP pribadi dan tidak punya akun dasbor.
+  if (pathname.startsWith('/antri')) {
     return NextResponse.next()
   }
 
@@ -93,5 +104,5 @@ export const config = {
   //
   // `login` sengaja TIDAK lagi dikecualikan: pengalihan www -> app di atas
   // harus bisa melihatnya. Pengecualiannya kini ditangani di dalam fungsi.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|download|.*\\..*).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|download|antri|.*\\..*).*)'],
 }

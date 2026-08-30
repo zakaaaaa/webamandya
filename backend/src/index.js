@@ -24,6 +24,7 @@ app.use('/api/complaints',         require('./routes/complaints'));
 require('./workers/pengirim').mulai();
 app.use('/api/payment',            require('./routes/payment'));
 app.use('/api/frames',             require('./routes/frames'));
+app.use('/api/queue',              require('./routes/queue'));
 app.use('/download', require('./routes/download'));
 
 // Health check
