@@ -1,12 +1,30 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bell, BellOff, Check, Loader2, TriangleAlert, X } from 'lucide-react'
+import { Bell, BellOff, Phone, X } from 'lucide-react'
+
+/*
+ * HALAMAN ANTREAN PELANGGAN
+ *
+ * Design read: halaman utilitas sekali-pakai, dibuka sambil berdiri di
+ * keramaian tenant, sering hanya dilirik beberapa detik. Keterbacaan sekilas
+ * mengalahkan komposisi. VARIANCE 4 / MOTION 3 / DENSITY 3.
+ *
+ * Aturan yang dikunci di berkas ini:
+ *   - Satu aksen saja: merah merek. Tidak ada warna kedua di mana pun.
+ *   - Dua tingkat radius saja: permukaan 20px, kendali 14px.
+ *   - Tema terang dikunci, mengikuti sistem desain situs yang memang belum
+ *     punya mode gelap. Layar HP di mall juga dibaca dalam kondisi silau.
+ *   - Tanpa emoji. Simbol memakai glif ikon.
+ *   - Gerak hanya transisi. Satu-satunya animasi berulang ada pada keadaan
+ *     "giliranmu", karena tugasnya memang menarik perhatian dari jauh, dan
+ *     itu pun mati di bawah prefers-reduced-motion.
+ */
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'https://api.pabrikenangan.my.id'
 
 // Polling, bukan websocket: wifi mall dan tethering HP sering memutus koneksi
-// panjang, dan permintaan pendek yang gagal cukup diulang 4 detik kemudian.
+// panjang, dan permintaan pendek yang gagal cukup diulang beberapa detik lagi.
 const POLL_TIKET_MS = 4000
 const POLL_BOOTH_MS = 8000
 
@@ -25,7 +43,7 @@ type Tiket = {
   nomor: number
   kode: string
   nama: string | null
-  // 'expired' = tiket dari hari sebelumnya, ditutup server saat hari berganti.
+  // 'expired' = tiket hari sebelumnya, ditutup server saat hari berganti.
   status: 'waiting' | 'called' | 'serving' | 'done' | 'skipped' | 'left' | 'expired'
   posisi: number | null
   estimasi_tunggu: number | null
@@ -35,24 +53,29 @@ type Tiket = {
 
 type Frame = { id: string; name: string; thumbnail_url: string | null; image_url: string | null }
 
-// Keadaan notifikasi yang DITAMPILKAN APA ADANYA ke pengunjung. Kegagalan
-// terburuk fitur ini bukan push yang tidak terkirim, melainkan orang yang
-// menjauh dari tenant karena mengira akan dikabari padahal izinnya mati.
+// Keadaan notifikasi yang DITAMPILKAN APA ADANYA. Kegagalan terburuk fitur ini
+// bukan push yang tidak terkirim, melainkan orang yang menjauh dari tenant
+// karena mengira akan dikabari padahal izinnya mati.
 type Kabar = 'memuat' | 'belum' | 'aktif' | 'ditolak' | 'tak-didukung'
 
 const C = {
-  merah: '#D42B22', merahTua: '#C02018',
-  teks: '#150C09', teks3: '#7A6259', teks4: '#9E8880',
-  bg: '#FAF7F5', kartu: '#FFFFFF', garis: 'rgba(212,43,34,0.14)',
+  aksen: '#D42B22',
+  aksenTua: '#B0201A',
+  teks: '#150C09',
+  teks2: '#5C463D',
+  teks3: '#8B7269',
+  ground: '#FAF7F5',
+  papan: '#FFFFFF',
+  garis: 'rgba(21,12,9,0.10)',
+  garisTipis: 'rgba(21,12,9,0.06)',
 }
 
-// Mengembalikan string siap tampil, bukan angka. Versi sebelumnya
-// mengembalikan null dan dirender apa adanya, sehingga estimasi yang belum
-// bisa dihitung muncul sebagai "± mnt" tanpa angka — terlihat seperti
-// halaman rusak, padahal maksudnya cuma "belum tahu".
+const R_PERMUKAAN = 20
+const R_KENDALI = 14
+
 function menitDari(detik: number | null | undefined) {
-  if (detik == null) return '–'
-  return String(Math.max(1, Math.round(detik / 60)))
+  if (detik == null) return null
+  return Math.max(1, Math.round(detik / 60))
 }
 
 // VAPID dikirim sebagai base64url; PushManager menuntut Uint8Array.
@@ -65,7 +88,7 @@ function kunciKeBytes(base64url: string) {
 
 // iOS hanya mengizinkan Web Push kalau halamannya sudah ditambahkan ke Layar
 // Utama. Menyuruh pengunjung photobooth melakukan itu tidak realistis, jadi
-// kasus ini dideteksi dan dijawab jujur — bukan dibiarkan gagal diam-diam.
+// kasus ini dideteksi dan dijawab jujur, bukan dibiarkan gagal diam-diam.
 function iosTanpaPush() {
   if (typeof window === 'undefined') return false
   const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
@@ -97,17 +120,15 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
   const kunciTiket = `antri:${slug}:tiket`
   const statusSebelum = useRef<string | null>(null)
 
-  // ── Muat keadaan booth ────────────────────────────────────────────────
   const muatBooth = useCallback(async () => {
     try {
       const r = await fetch(`${API}/api/queue/${slug}`, { cache: 'no-store' })
       if (r.ok) setBooth(await r.json())
     } catch {
-      // Jaringan tenant sering putus-nyambung; diamkan dan coba lagi di tik berikutnya.
+      // Jaringan tenant sering putus-nyambung; pertahankan tampilan terakhir.
     }
   }, [slug])
 
-  // ── Muat tiket tersimpan ──────────────────────────────────────────────
   const muatTiket = useCallback(async (id: string) => {
     try {
       const r = await fetch(`${API}/api/queue/${slug}/t/${id}`, { cache: 'no-store' })
@@ -119,16 +140,14 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
       if (!r.ok) return
       const data: Tiket = await r.json()
 
-      // Tiket yang sudah tuntas dilepas dari penyimpanan supaya orang yang
-      // memindai QR lagi besok tidak tersangkut pada tiket kemarin. 'expired'
-      // WAJIB ada di daftar ini: tanpanya, tiket kemarin tetap dirender
-      // sebagai antrean aktif meski booth-nya sudah tutup.
+      // 'expired' WAJIB ada di daftar ini: tanpanya, tiket kemarin tetap
+      // dirender sebagai antrean aktif meski booth-nya sudah tutup.
       if (['done', 'skipped', 'left', 'expired'].includes(data.status)) {
         localStorage.removeItem(kunciTiket)
       }
       setTiket(data)
     } catch {
-      /* abaikan, coba lagi */
+      /* abaikan, coba lagi di tik berikutnya */
     }
   }, [slug, kunciTiket])
 
@@ -143,19 +162,15 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
     else setKabar('belum')
   }, [muatBooth, muatTiket, kunciTiket])
 
-  // ── Polling ───────────────────────────────────────────────────────────
   useEffect(() => {
     const aktif = tiket && ['waiting', 'called', 'serving'].includes(tiket.status)
-    const jeda = aktif ? POLL_TIKET_MS : POLL_BOOTH_MS
-
     const t = setInterval(() => {
       if (aktif && tiket) muatTiket(tiket.ticket_id)
       else muatBooth()
-    }, jeda)
+    }, aktif ? POLL_TIKET_MS : POLL_BOOTH_MS)
     return () => clearInterval(t)
   }, [tiket, muatTiket, muatBooth])
 
-  // ── Getar saat giliran tiba ───────────────────────────────────────────
   // Pengunjung yang halamannya masih terbuka di tangan tidak menerima
   // notifikasi sistem (browser menahannya saat tab aktif), jadi perubahan
   // status harus terasa dari halaman itu sendiri.
@@ -167,7 +182,6 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
     statusSebelum.current = tiket.status
   }, [tiket])
 
-  // ── Ambil nomor ───────────────────────────────────────────────────────
   async function ambilNomor() {
     setSibuk(true); setGalat(null)
     try {
@@ -182,14 +196,8 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
       })
       const data = await r.json()
       if (!r.ok) { setGalat(data.message || 'Gagal mengambil nomor.'); return }
-
       localStorage.setItem(kunciTiket, data.ticket_id)
       await muatTiket(data.ticket_id)
-
-      // Izin notifikasi diminta SESUDAH nomor didapat, dan hanya lewat tap
-      // eksplisit di layar berikutnya. Prompt otomatis saat halaman terbuka
-      // sering diblokir Chrome diam-diam, dan pengunjung tidak pernah tahu
-      // notifikasinya mati.
     } catch {
       setGalat('Tidak bisa terhubung. Cek sinyal lalu coba lagi.')
     } finally {
@@ -197,22 +205,22 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
     }
   }
 
-  // ── Nyalakan notifikasi ───────────────────────────────────────────────
   async function nyalakanKabar() {
     if (!tiket || !booth?.vapid_public_key) return
     setSibuk(true)
     try {
+      // Izin diminta lewat tap eksplisit, bukan otomatis saat halaman terbuka.
+      // Prompt otomatis sering diblokir Chrome diam-diam, dan pengunjung tidak
+      // pernah tahu notifikasinya mati.
       const izin = await Notification.requestPermission()
       if (izin !== 'granted') { setKabar('ditolak'); return }
 
       const reg = await navigator.serviceWorker.register('/sw.js')
       await navigator.serviceWorker.ready
-
       const langganan = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: kunciKeBytes(booth.vapid_public_key),
       })
-
       const r = await fetch(`${API}/api/queue/${slug}/t/${tiket.ticket_id}/push`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -227,7 +235,6 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
     }
   }
 
-  // ── Frame ─────────────────────────────────────────────────────────────
   async function bukaPilihanFrame() {
     setBukaFrame(true)
     if (frames) return
@@ -261,260 +268,303 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
     } finally { setSibuk(false) }
   }
 
-  // ── Tampilan ──────────────────────────────────────────────────────────
   const aktif = tiket && ['waiting', 'called', 'serving'].includes(tiket.status)
+  const kabarAktif = kabar === 'aktif' || tiket?.dikabari
 
   return (
-    <div style={{ minHeight: '100dvh', background: C.bg, color: C.teks, fontFamily: "'Poppins',sans-serif" }}>
+    <div style={{ minHeight: '100dvh', background: C.ground, color: C.teks, fontFamily: "'Poppins',sans-serif" }}>
       <style>{`
-        @keyframes denyut { 0%,100%{transform:scale(1)} 50%{transform:scale(1.03)} }
-        .denyut { animation: denyut 1.4s ease-in-out infinite; }
-        .tombol { border:none; border-radius:14px; font-family:inherit; font-weight:700;
-                  cursor:pointer; width:100%; padding:16px; font-size:16px; }
-        .tombol:disabled { opacity:.55; cursor:default; }
-        .isian { width:100%; padding:14px 16px; border-radius:12px; font-family:inherit;
-                 font-size:16px; border:1px solid ${C.garis}; background:#fff; color:${C.teks}; }
-        .isian:focus { outline:2px solid ${C.merah}; outline-offset:-1px; }
+        .q-btn { border:none; font-family:inherit; font-weight:700; cursor:pointer;
+                 width:100%; padding:17px 20px; font-size:16px;
+                 border-radius:${R_KENDALI}px; transition:transform .12s ease, background .18s ease; }
+        .q-btn:active { transform:scale(.985); }
+        .q-btn:disabled { opacity:.5; cursor:default; transform:none; }
+        .q-field { width:100%; padding:15px 16px; border-radius:${R_KENDALI}px; font-family:inherit;
+                   font-size:16px; border:1px solid ${C.garis}; background:${C.papan}; color:${C.teks};
+                   transition:border-color .18s ease; }
+        .q-field::placeholder { color:${C.teks3}; }
+        .q-field:focus { outline:none; border-color:${C.aksen}; box-shadow:0 0 0 3px rgba(212,43,34,.14); }
+        .q-skel { background:linear-gradient(90deg, rgba(21,12,9,.05), rgba(21,12,9,.10), rgba(21,12,9,.05));
+                  background-size:200% 100%; animation:q-shine 1.3s ease-in-out infinite;
+                  border-radius:${R_PERMUKAAN}px; }
+        @keyframes q-shine { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+        /* Satu-satunya animasi berulang di halaman ini. Tugasnya menarik
+           perhatian dari beberapa meter, jadi geraknya dibenarkan. */
+        .q-alert { animation:q-breathe 2s ease-in-out infinite; }
+        @keyframes q-breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.015)} }
+        @media (prefers-reduced-motion: reduce) {
+          .q-skel, .q-alert { animation:none; }
+          .q-btn { transition:none; }
+        }
       `}</style>
 
-      <div style={{ maxWidth: 460, margin: '0 auto', padding: '28px 20px 48px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <img src="/logo-pk.webp" alt="Pabrik Kenangan" width={196} height={110}
-            style={{ width: 116, height: 'auto', margin: '0 auto 10px', display: 'block' }} />
-          <div style={{ fontSize: 12.5, color: C.teks4, letterSpacing: '.04em' }}>{boothName}</div>
-        </div>
+      <div style={{ maxWidth: 440, margin: '0 auto', padding: '32px 20px 56px' }}>
 
+        <header style={{ marginBottom: 28 }}>
+          <img src="/logo-pk.webp" alt="Pabrik Kenangan" width={196} height={110}
+            style={{ width: 104, height: 'auto', display: 'block' }} />
+          <p style={{ fontSize: 13, color: C.teks3, marginTop: 8 }}>{boothName}</p>
+        </header>
+
+        {/* Muat awal: kerangka seukuran kartu aslinya, bukan pemintal generik */}
         {!booth && (
-          <div style={{ textAlign: 'center', padding: 48, color: C.teks4 }}>
-            <Loader2 size={26} className="denyut" style={{ opacity: .6 }} />
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div className="q-skel" style={{ height: 132 }} />
+            <div className="q-skel" style={{ height: 56, borderRadius: R_KENDALI }} />
           </div>
         )}
 
-        {/* ── Sudah punya tiket ── */}
-        {booth && aktif && tiket && (
+        {/* ── GILIRANMU ── */}
+        {booth && aktif && tiket?.status === 'called' && (
+          <section className="q-alert" style={{
+            background: C.aksen, color: '#fff', borderRadius: R_PERMUKAAN, padding: '32px 24px',
+            boxShadow: '0 14px 40px rgba(212,43,34,.24)',
+          }}>
+            <p style={{ fontSize: 13, fontWeight: 600, letterSpacing: '.08em', opacity: .92 }}>GILIRANMU SEKARANG</p>
+            <p style={{ fontSize: 68, fontWeight: 800, lineHeight: 1, margin: '8px 0 4px', letterSpacing: '-0.03em' }}>
+              {tiket.nomor}
+            </p>
+            <p style={{ fontSize: 15, opacity: .92, marginBottom: 22 }}>Datang ke booth sekarang.</p>
+            <div style={{ background: 'rgba(255,255,255,.16)', borderRadius: R_KENDALI, padding: '16px 18px' }}>
+              <p style={{ fontSize: 12.5, opacity: .88, marginBottom: 4 }}>Tunjukkan kode ini di booth</p>
+              <p style={{ fontSize: 42, fontWeight: 800, letterSpacing: '.18em', lineHeight: 1.1 }}>{tiket.kode}</p>
+            </div>
+          </section>
+        )}
+
+        {/* ── SEDANG BERFOTO ── */}
+        {booth && aktif && tiket?.status === 'serving' && (
+          <section style={{ background: C.papan, border: `1px solid ${C.garisTipis}`, borderRadius: R_PERMUKAAN, padding: 32 }}>
+            <p style={{ fontSize: 19, fontWeight: 700 }}>Selamat berfoto</p>
+            <p style={{ fontSize: 14, color: C.teks2, marginTop: 6, lineHeight: 1.6 }}>
+              Sesimu sedang berlangsung di booth.
+            </p>
+          </section>
+        )}
+
+        {/* ── MENUNGGU ── */}
+        {booth && aktif && tiket?.status === 'waiting' && (
           <>
-            {tiket.status === 'called' && (
-              <div className="denyut" style={{
-                background: C.merah, color: '#fff', borderRadius: 22, padding: '30px 22px',
-                textAlign: 'center', marginBottom: 16,
-                boxShadow: '0 10px 30px rgba(212,43,34,.28)',
-              }}>
-                <div style={{ fontSize: 13, opacity: .9, fontWeight: 600, letterSpacing: '.06em' }}>GILIRANMU SEKARANG</div>
-                <div style={{ fontSize: 58, fontWeight: 900, lineHeight: 1.1, margin: '6px 0 2px' }}>{tiket.nomor}</div>
-                <div style={{ fontSize: 14, opacity: .92, marginBottom: 18 }}>Datang ke booth sekarang ya</div>
-                <div style={{ background: 'rgba(255,255,255,.16)', borderRadius: 14, padding: '14px 16px' }}>
-                  <div style={{ fontSize: 12, opacity: .85, marginBottom: 4 }}>Sebutkan / ketik kode ini di booth</div>
-                  <div style={{ fontSize: 40, fontWeight: 900, letterSpacing: '.16em' }}>{tiket.kode}</div>
+            <section style={{
+              background: C.papan, border: `1px solid ${C.garisTipis}`, borderRadius: R_PERMUKAAN,
+              padding: '26px 24px 22px',
+            }}>
+              <p style={{ fontSize: 12.5, color: C.teks3, fontWeight: 600, letterSpacing: '.07em' }}>NOMOR ANTREANMU</p>
+              <p style={{ fontSize: 76, fontWeight: 800, color: C.aksen, lineHeight: 1, margin: '4px 0 20px', letterSpacing: '-0.04em' }}>
+                {tiket.nomor}
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, borderTop: `1px solid ${C.garisTipis}`, paddingTop: 18 }}>
+                <div>
+                  <p style={{ fontSize: 21, fontWeight: 700 }}>
+                    {tiket.posisi === 1 ? 'Berikutnya' : `${(tiket.posisi ?? 1) - 1} orang`}
+                  </p>
+                  <p style={{ fontSize: 12, color: C.teks3, marginTop: 2 }}>
+                    {tiket.posisi === 1 ? 'kamu paling depan' : 'di depanmu'}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 21, fontWeight: 700 }}>
+                    {menitDari(tiket.estimasi_tunggu) ?? 'Belum'} {menitDari(tiket.estimasi_tunggu) ? 'menit' : 'terhitung'}
+                  </p>
+                  <p style={{ fontSize: 12, color: C.teks3, marginTop: 2 }}>perkiraan tunggu</p>
                 </div>
               </div>
-            )}
+            </section>
 
-            {tiket.status === 'serving' && (
-              <div style={{
-                background: C.kartu, border: `1px solid ${C.garis}`, borderRadius: 22,
-                padding: 30, textAlign: 'center', marginBottom: 16,
-              }}>
-                <Check size={34} color={C.merah} style={{ margin: '0 auto 10px', display: 'block' }} />
-                <div style={{ fontSize: 18, fontWeight: 800 }}>Selamat berfoto!</div>
-                <div style={{ fontSize: 13.5, color: C.teks3, marginTop: 6 }}>
-                  Sesimu sedang berlangsung di booth.
-                </div>
-              </div>
-            )}
+            <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
+              {kabarAktif ? (
+                <p style={{
+                  display: 'flex', gap: 10, alignItems: 'center', fontSize: 13.5, color: C.teks2,
+                  padding: '14px 16px', border: `1px solid ${C.garisTipis}`, borderRadius: R_KENDALI, lineHeight: 1.5,
+                }}>
+                  <Bell size={17} strokeWidth={1.8} color={C.aksen} style={{ flexShrink: 0 }} />
+                  Kami kabari lewat HP ini. Silakan jalan-jalan dulu.
+                </p>
+              ) : kabar === 'belum' ? (
+                <button className="q-btn" onClick={nyalakanKabar} disabled={sibuk || !booth.vapid_public_key}
+                  style={{ background: C.teks, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9 }}>
+                  <Bell size={17} strokeWidth={2} /> Kabari saya di HP ini
+                </button>
+              ) : (
+                <p style={{
+                  display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: C.teks2,
+                  padding: '14px 16px', border: `1px solid ${C.garis}`, borderRadius: R_KENDALI, lineHeight: 1.55,
+                }}>
+                  <BellOff size={17} strokeWidth={1.8} color={C.teks3} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span>
+                    <strong style={{ color: C.teks }}>Notifikasi tidak aktif di HP ini.</strong>{' '}
+                    Jangan jauh dari booth, atau biarkan halaman ini terbuka.
+                  </span>
+                </p>
+              )}
 
-            {tiket.status === 'waiting' && (
-              <div style={{
-                background: C.kartu, border: `1px solid ${C.garis}`, borderRadius: 22,
-                padding: '26px 22px', textAlign: 'center', marginBottom: 14,
-                boxShadow: '0 2px 12px rgba(212,43,34,.06)',
-              }}>
-                <div style={{ fontSize: 12.5, color: C.teks4, letterSpacing: '.06em', fontWeight: 600 }}>NOMOR ANTREANMU</div>
-                <div style={{ fontSize: 64, fontWeight: 900, color: C.merah, lineHeight: 1.05, margin: '2px 0 14px' }}>
-                  {tiket.nomor}
-                </div>
+              {/* Pilih frame cukup satu tombol. Kisi thumbnail dibuka di lembar
+                  terpisah supaya halaman utamanya tetap sependek mungkin. */}
+              <button className="q-btn" onClick={bukaPilihanFrame} disabled={sibuk}
+                style={{
+                  background: C.papan, color: tiket.frame_id ? C.aksen : C.teks,
+                  border: `1px solid ${tiket.frame_id ? C.aksen : C.garis}`, fontWeight: 600, fontSize: 15,
+                }}>
+                {tiket.frame_id ? 'Frame sudah dipilih. Ganti' : 'Pilih frame sekarang'}
+              </button>
 
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <div style={{ flex: 1, background: C.bg, borderRadius: 14, padding: '12px 8px' }}>
-                    <div style={{ fontSize: 22, fontWeight: 800 }}>
-                      {tiket.posisi === 1 ? 'Berikutnya' : `${(tiket.posisi ?? 1) - 1} orang`}
-                    </div>
-                    <div style={{ fontSize: 11.5, color: C.teks4, marginTop: 2 }}>
-                      {tiket.posisi === 1 ? 'kamu paling depan' : 'di depanmu'}
-                    </div>
-                  </div>
-                  <div style={{ flex: 1, background: C.bg, borderRadius: 14, padding: '12px 8px' }}>
-                    <div style={{ fontSize: 22, fontWeight: 800 }}>±{menitDari(tiket.estimasi_tunggu)} mnt</div>
-                    <div style={{ fontSize: 11.5, color: C.teks4, marginTop: 2 }}>perkiraan tunggu</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Status notifikasi — selalu jujur */}
-            {tiket.status !== 'serving' && (
-              <div style={{ marginBottom: 14 }}>
-                {kabar === 'aktif' || tiket.dikabari ? (
-                  <div style={{
-                    display: 'flex', gap: 10, alignItems: 'center', background: '#EDF7EE',
-                    border: '1px solid rgba(45,125,60,.18)', borderRadius: 14, padding: '13px 15px',
-                  }}>
-                    <Bell size={17} color="#2D7D3C" style={{ flexShrink: 0 }} />
-                    <div style={{ fontSize: 13, color: '#2D7D3C', lineHeight: 1.45 }}>
-                      Kami akan mengabarimu di HP ini. Silakan jalan-jalan dulu.
-                    </div>
-                  </div>
-                ) : kabar === 'belum' ? (
-                  <button className="tombol" onClick={nyalakanKabar} disabled={sibuk || !booth.vapid_public_key}
-                    style={{ background: C.teks, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9 }}>
-                    <Bell size={17} /> Kabari saya di HP ini
-                  </button>
-                ) : (
-                  <div style={{
-                    display: 'flex', gap: 10, alignItems: 'flex-start', background: '#FFF6E9',
-                    border: '1px solid rgba(190,120,20,.2)', borderRadius: 14, padding: '13px 15px',
-                  }}>
-                    <TriangleAlert size={17} color="#B87514" style={{ flexShrink: 0, marginTop: 1 }} />
-                    <div style={{ fontSize: 12.5, color: '#8A5810', lineHeight: 1.5 }}>
-                      <b>Notifikasi tidak aktif di HP ini.</b> Jangan jauh-jauh dari booth, atau
-                      biarkan halaman ini terbuka — petugas juga bisa memanggil namamu.
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Pilih frame sambil menunggu */}
-            {tiket.status === 'waiting' && (
-              <div style={{ marginBottom: 14 }}>
-                {!bukaFrame ? (
-                  <button className="tombol" onClick={bukaPilihanFrame}
-                    style={{ background: tiket.frame_id ? '#EDF7EE' : C.kartu, color: tiket.frame_id ? '#2D7D3C' : C.teks, border: `1px solid ${C.garis}` }}>
-                    {tiket.frame_id ? '✓ Frame sudah dipilih — ganti?' : 'Pilih frame sekarang (hemat waktu di booth)'}
-                  </button>
-                ) : (
-                  <div style={{ background: C.kartu, border: `1px solid ${C.garis}`, borderRadius: 18, padding: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <b style={{ fontSize: 14 }}>Pilih frame</b>
-                      <button onClick={() => setBukaFrame(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.teks4 }}>
-                        <X size={18} />
-                      </button>
-                    </div>
-                    {!frames ? (
-                      <div style={{ textAlign: 'center', padding: 24, color: C.teks4 }}><Loader2 size={20} className="denyut" /></div>
-                    ) : frames.length === 0 ? (
-                      <div style={{ fontSize: 13, color: C.teks4 }}>Belum ada frame yang bisa dipilih.</div>
-                    ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-                        {frames.map((f) => (
-                          <button key={f.id} onClick={() => pilihFrame(f.id)} disabled={sibuk}
-                            style={{
-                              border: tiket.frame_id === f.id ? `2px solid ${C.merah}` : `1px solid ${C.garis}`,
-                              borderRadius: 12, padding: 4, background: '#fff', cursor: 'pointer',
-                            }}>
-                            <img src={f.thumbnail_url || f.image_url || ''} alt={f.name}
-                              style={{ width: '100%', aspectRatio: '2/3', objectFit: 'cover', borderRadius: 8, display: 'block' }} />
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {tiket.status !== 'serving' && (
               <button onClick={batalkan} disabled={sibuk}
-                style={{ background: 'none', border: 'none', color: C.teks4, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', width: '100%', padding: 12 }}>
+                style={{
+                  background: 'none', border: 'none', color: C.teks3, fontSize: 13, fontFamily: 'inherit',
+                  cursor: 'pointer', padding: 12, textDecoration: 'underline', textUnderlineOffset: 3,
+                }}>
                 Batalkan antrean
               </button>
-            )}
+            </div>
           </>
         )}
 
-        {/* ── Tiket sudah selesai / dilewati ── */}
+        {/* ── TIKET SUDAH TUNTAS ── */}
         {booth && tiket && !aktif && (
-          <div style={{ background: C.kartu, border: `1px solid ${C.garis}`, borderRadius: 22, padding: 30, textAlign: 'center' }}>
-            <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
-              {tiket.status === 'done'
-                ? 'Sesimu sudah selesai'
-                : tiket.status === 'skipped'
-                  ? 'Nomormu terlewat'
-                  : tiket.status === 'expired'
-                    ? 'Nomor ini sudah tidak berlaku'
-                    : 'Antrean dibatalkan'}
-            </div>
-            <p style={{ fontSize: 13.5, color: C.teks3, lineHeight: 1.6, marginBottom: 18 }}>
-              {tiket.status === 'skipped'
-                ? 'Nomormu dipanggil tapi belum ada yang datang. Ambil nomor baru atau temui petugas di booth.'
-                : tiket.status === 'expired'
-                  ? 'Nomor antrean hanya berlaku pada hari yang sama. Ambil nomor baru kalau booth sedang buka.'
-                  : 'Terima kasih sudah berfoto bersama kami!'}
+          <section style={{ background: C.papan, border: `1px solid ${C.garisTipis}`, borderRadius: R_PERMUKAAN, padding: 28 }}>
+            <p style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>
+              {tiket.status === 'done' ? 'Sesimu sudah selesai'
+                : tiket.status === 'skipped' ? 'Nomormu terlewat'
+                : tiket.status === 'expired' ? 'Nomor ini sudah tidak berlaku'
+                : 'Antrean dibatalkan'}
             </p>
-            <button className="tombol" onClick={() => { setTiket(null); muatBooth() }} style={{ background: C.merah, color: '#fff' }}>
+            <p style={{ fontSize: 14, color: C.teks2, lineHeight: 1.6, marginBottom: 20 }}>
+              {tiket.status === 'skipped' ? 'Nomormu dipanggil tapi belum ada yang datang. Temui petugas di booth.'
+                : tiket.status === 'expired' ? 'Nomor antrean hanya berlaku di hari yang sama.'
+                : 'Terima kasih sudah berfoto bersama kami.'}
+            </p>
+            <button className="q-btn" onClick={() => { setTiket(null); muatBooth() }}
+              style={{ background: C.aksen, color: '#fff' }}>
               Ambil nomor baru
             </button>
-          </div>
+          </section>
         )}
 
-        {/* ── Belum punya tiket ── */}
+        {/* ── BELUM PUNYA TIKET ── */}
         {booth && !tiket && (
-          <>
-            {booth.mode === 'off' ? (
-              <div style={{ background: C.kartu, border: `1px solid ${C.garis}`, borderRadius: 22, padding: 32, textAlign: 'center' }}>
-                <div style={{ fontSize: 34, marginBottom: 10 }}>📸</div>
-                <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 8 }}>Booth sedang kosong</div>
-                <p style={{ fontSize: 14, color: C.teks3, lineHeight: 1.6 }}>
-                  Tidak perlu antre — <b>langsung datang saja</b> ke booth dan mulai berfoto.
-                </p>
-              </div>
-            ) : !booth.menerima_tiket ? (
-              <div style={{ background: C.kartu, border: `1px solid ${C.garis}`, borderRadius: 22, padding: 32, textAlign: 'center' }}>
-                <BellOff size={30} color={C.teks4} style={{ margin: '0 auto 12px', display: 'block' }} />
-                <div style={{ fontSize: 19, fontWeight: 800, marginBottom: 8 }}>
-                  {booth.mode === 'closing' ? 'Antrean sudah ditutup' : 'Antrean sedang penuh'}
+          booth.mode === 'off' ? (
+            <section style={{ background: C.papan, border: `1px solid ${C.garisTipis}`, borderRadius: R_PERMUKAAN, padding: 28 }}>
+              <p style={{ fontSize: 19, fontWeight: 700, marginBottom: 8 }}>Booth sedang kosong</p>
+              <p style={{ fontSize: 14.5, color: C.teks2, lineHeight: 1.6 }}>
+                Tidak perlu antre. Langsung datang saja ke booth dan mulai berfoto.
+              </p>
+            </section>
+          ) : !booth.menerima_tiket ? (
+            <section style={{ background: C.papan, border: `1px solid ${C.garisTipis}`, borderRadius: R_PERMUKAAN, padding: 28 }}>
+              <p style={{ fontSize: 19, fontWeight: 700, marginBottom: 8 }}>
+                {booth.mode === 'closing' ? 'Antrean sudah ditutup' : 'Antrean sedang penuh'}
+              </p>
+              <p style={{ fontSize: 14.5, color: C.teks2, lineHeight: 1.6 }}>
+                {booth.mode === 'closing'
+                  ? 'Pendaftaran hari ini sudah ditutup. Temui petugas di booth.'
+                  : `Ada ${booth.menunggu} orang mengantre. Coba lagi sekitar ${menitDari(booth.estimasi_tunggu) ?? 30} menit lagi.`}
+              </p>
+            </section>
+          ) : (
+            <section>
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '20px 0 22px',
+                borderBottom: `1px solid ${C.garisTipis}`, marginBottom: 22,
+              }}>
+                <div>
+                  <p style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>{booth.menunggu}</p>
+                  <p style={{ fontSize: 12.5, color: C.teks3, marginTop: 5 }}>sedang mengantre</p>
                 </div>
-                <p style={{ fontSize: 14, color: C.teks3, lineHeight: 1.6 }}>
-                  {booth.mode === 'closing'
-                    ? 'Pendaftaran antrean hari ini sudah ditutup. Coba tanya petugas di booth.'
-                    : `Sedang ada ${booth.menunggu} orang mengantre. Coba lagi sekitar ${menitDari(booth.estimasi_tunggu)} menit lagi.`}
-                </p>
+                <div>
+                  <p style={{ fontSize: 30, fontWeight: 800, lineHeight: 1 }}>
+                    {menitDari(booth.estimasi_tunggu) ?? 0}<span style={{ fontSize: 16, fontWeight: 600 }}> mnt</span>
+                  </p>
+                  <p style={{ fontSize: 12.5, color: C.teks3, marginTop: 5 }}>perkiraan tunggu</p>
+                </div>
               </div>
-            ) : (
-              <div style={{ background: C.kartu, border: `1px solid ${C.garis}`, borderRadius: 22, padding: 24, boxShadow: '0 2px 12px rgba(212,43,34,.06)' }}>
-                <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-                  <div style={{ flex: 1, background: C.bg, borderRadius: 14, padding: '14px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 24, fontWeight: 800 }}>{booth.menunggu}</div>
-                    <div style={{ fontSize: 11.5, color: C.teks4 }}>sedang mengantre</div>
-                  </div>
-                  <div style={{ flex: 1, background: C.bg, borderRadius: 14, padding: '14px 8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 24, fontWeight: 800 }}>±{menitDari(booth.estimasi_tunggu)} mnt</div>
-                    <div style={{ fontSize: 11.5, color: C.teks4 }}>perkiraan tunggu</div>
-                  </div>
+
+              <div style={{ display: 'grid', gap: 14 }}>
+                <div style={{ display: 'grid', gap: 7 }}>
+                  <label htmlFor="q-nama" style={{ fontSize: 13, fontWeight: 600, color: C.teks2 }}>Nama</label>
+                  <input id="q-nama" className="q-field" value={nama} maxLength={40}
+                    onChange={(e) => setNama(e.target.value)} placeholder="Boleh dikosongkan" />
                 </div>
 
-                <div style={{ display: 'grid', gap: 10, marginBottom: 16 }}>
-                  <input className="isian" placeholder="Nama (opsional)" value={nama}
-                    onChange={(e) => setNama(e.target.value)} maxLength={40} />
-                  <input className="isian" placeholder="Nomor HP (opsional)" value={telepon} inputMode="tel"
-                    onChange={(e) => setTelepon(e.target.value)} maxLength={20} />
-                  <div style={{ fontSize: 11.5, color: C.teks4, lineHeight: 1.5 }}>
-                    Nomor HP hanya dipakai petugas untuk memanggilmu kalau notifikasi tidak sampai.
-                  </div>
+                <div style={{ display: 'grid', gap: 7 }}>
+                  <label htmlFor="q-hp" style={{ fontSize: 13, fontWeight: 600, color: C.teks2 }}>Nomor HP</label>
+                  <input id="q-hp" className="q-field" value={telepon} inputMode="tel" maxLength={20}
+                    onChange={(e) => setTelepon(e.target.value)} placeholder="Boleh dikosongkan" />
+                  <p style={{ fontSize: 12, color: C.teks3, lineHeight: 1.5, display: 'flex', gap: 7, alignItems: 'flex-start' }}>
+                    <Phone size={13} strokeWidth={1.8} style={{ flexShrink: 0, marginTop: 2 }} />
+                    Hanya dipakai petugas kalau notifikasi tidak sampai.
+                  </p>
                 </div>
 
                 {galat && (
-                  <div style={{ fontSize: 13, color: C.merahTua, marginBottom: 12, lineHeight: 1.5 }}>{galat}</div>
+                  <p style={{ fontSize: 13, color: C.aksenTua, lineHeight: 1.5, fontWeight: 600 }}>{galat}</p>
                 )}
 
-                <button className="tombol" onClick={ambilNomor} disabled={sibuk}
-                  style={{ background: C.merah, color: '#fff' }}>
-                  {sibuk ? 'Mengambil…' : 'Ambil nomor antrean'}
+                <button className="q-btn" onClick={ambilNomor} disabled={sibuk}
+                  style={{ background: C.aksen, color: '#fff' }}>
+                  {sibuk ? 'Mengambil nomor' : 'Ambil nomor antrean'}
                 </button>
               </div>
-            )}
-          </>
+            </section>
+          )
         )}
       </div>
+
+      {/* ── LEMBAR PILIH FRAME ── */}
+      {bukaFrame && (
+        <div
+          role="dialog" aria-modal="true" aria-label="Pilih frame"
+          onClick={() => setBukaFrame(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(21,12,9,.45)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{
+              background: C.ground, width: '100%', maxWidth: 440, maxHeight: '82dvh', overflowY: 'auto',
+              borderRadius: `${R_PERMUKAAN}px ${R_PERMUKAAN}px 0 0`, padding: '20px 20px 32px',
+            }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <p style={{ fontSize: 16, fontWeight: 700 }}>Pilih frame</p>
+              <button onClick={() => setBukaFrame(false)} aria-label="Tutup"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.teks3, padding: 4 }}>
+                <X size={20} strokeWidth={2} />
+              </button>
+            </div>
+            <p style={{ fontSize: 13, color: C.teks2, marginBottom: 16, lineHeight: 1.5 }}>
+              Memilih sekarang membuatmu langsung berfoto saat gilirannya tiba.
+            </p>
+
+            {!frames ? (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="q-skel" style={{ aspectRatio: '2/3', borderRadius: R_KENDALI }} />
+                ))}
+              </div>
+            ) : frames.length === 0 ? (
+              <p style={{ fontSize: 13.5, color: C.teks2, padding: '24px 0' }}>
+                Belum ada frame yang bisa dipilih. Kamu tetap bisa memilihnya nanti di booth.
+              </p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                {frames.map((f) => {
+                  const terpilih = tiket?.frame_id === f.id
+                  return (
+                    <button key={f.id} onClick={() => pilihFrame(f.id)} disabled={sibuk} aria-label={f.name}
+                      style={{
+                        border: `2px solid ${terpilih ? C.aksen : 'transparent'}`,
+                        borderRadius: R_KENDALI, padding: 3, background: C.papan, cursor: 'pointer',
+                        boxShadow: terpilih ? 'none' : `inset 0 0 0 1px ${C.garisTipis}`,
+                      }}>
+                      <img src={f.thumbnail_url || f.image_url || ''} alt={f.name}
+                        style={{ width: '100%', aspectRatio: '2/3', objectFit: 'cover', borderRadius: R_KENDALI - 4, display: 'block' }} />
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

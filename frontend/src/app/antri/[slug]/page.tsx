@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   return {
-    title: 'Antrean Photobooth — Pabrik Kenangan',
+    title: 'Antrean Photobooth - Pabrik Kenangan',
     description: `Ambil nomor antrean photobooth tanpa perlu berdiri mengantre.`,
     robots: { index: false },
     other: { slug },
@@ -43,15 +43,15 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
         fontFamily: "'Poppins',sans-serif",
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
       }}>
-        <div style={{ textAlign: 'center', maxWidth: 340 }}>
+        <div style={{ maxWidth: 360, width: '100%' }}>
           <img src="/logo-pk.webp" alt="Pabrik Kenangan" width={196} height={110}
-            style={{ width: 140, height: 'auto', margin: '0 auto 24px', display: 'block' }} />
-          <h1 style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>Booth tidak ditemukan</h1>
-          <p style={{ fontSize: 13.5, color: '#9E8880', lineHeight: 1.6 }}>
+            style={{ width: 104, height: 'auto', marginBottom: 28, display: 'block' }} />
+          <h1 style={{ fontSize: 19, fontWeight: 700, marginBottom: 8 }}>Booth tidak ditemukan</h1>
+          <p style={{ fontSize: 14, color: '#5C463D', lineHeight: 1.6 }}>
             Kode booth ini tidak dikenal. Coba pindai ulang QR di standee, atau tanya
             petugas di lokasi.
           </p>
-          <code style={{ display: 'block', marginTop: 20, fontSize: 11, color: '#C7B8B2', fontFamily: 'monospace' }}>
+          <code style={{ display: 'block', marginTop: 20, fontSize: 12, color: '#8B7269', fontFamily: 'monospace' }}>
             /antri/{slug}
           </code>
         </div>
