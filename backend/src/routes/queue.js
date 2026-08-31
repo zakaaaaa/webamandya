@@ -58,6 +58,30 @@ async function ambilStateByDevice(deviceId) {
   return data || null;
 }
 
+// Tutup tiket yang tertinggal dari hari sebelumnya.
+//
+// Tanpa ini, tiket kemarin tetap 'waiting' selamanya: HP pengunjung masih
+// merendernya sebagai antrean aktif meski mode sudah mati, kode klaimnya
+// terkunci terus oleh indeks unik parsial, dan tiketnya sendiri tidak akan
+// pernah bisa dipanggil karena papan hanya membaca hari ini.
+//
+// Dijalankan malas (saat ada yang membaca antrean) alih-alih lewat penjadwal:
+// booth hanya hidup pada jam operasional, dan penjadwal tengah malam adalah
+// satu bagian bergerak lagi yang bisa mati diam-diam tanpa ada yang sadar.
+async function tutupTiketBasi(deviceId) {
+  try {
+    await supabase
+      .from('queue_tickets')
+      .update({ status: 'expired', closed_at: new Date().toISOString() })
+      .eq('device_id', deviceId)
+      .in('status', AKTIF)
+      .lt('queue_date', tanggalJakarta());
+  } catch (e) {
+    // Pembersihan tidak boleh menggagalkan pembacaan antrean.
+    console.error('[Queue] tutupTiketBasi error:', e);
+  }
+}
+
 // Semua tiket hidup hari ini, terurut. Papan antrean, posisi, dan estimasi
 // semuanya diturunkan dari SATU query ini supaya polling tetap murah.
 async function ambilPapan(deviceId) {
@@ -235,6 +259,7 @@ router.post('/kiosk/state', validateDevice, async (req, res) => {
     const state = await ambilStateByDevice(req.device.id);
     if (!state) return res.json({ success: true, mode: 'off', slug: null, dipanggil: null, menunggu: 0 });
 
+    await tutupTiketBasi(state.device_id);
     const papan = await ambilPapan(state.device_id);
     const dipanggil = papan.find((t) => t.status === 'called') || null;
     const dilayani  = papan.find((t) => t.status === 'serving') || null;
@@ -411,6 +436,7 @@ router.post('/:slug/op/verify', pinOperator, (req, res) => {
 
 router.get('/:slug/op/board', pinOperator, async (req, res) => {
   try {
+    await tutupTiketBasi(req.state.device_id);
     const papan = await ambilPapan(req.state.device_id);
     const rata  = await estimasiDetik(req.state.device_id, req.state);
     const didepan = papan.filter((t) => t.status === 'called' || t.status === 'serving').length;
@@ -586,6 +612,7 @@ router.get('/:slug', async (req, res) => {
     const state = await ambilState(req.params.slug);
     if (!state) return res.status(404).json({ success: false, message: 'Booth tidak ditemukan.' });
 
+    await tutupTiketBasi(state.device_id);
     const papan = await ambilPapan(state.device_id);
     const rata  = await estimasiDetik(state.device_id, state);
     const menunggu = papan.filter((t) => t.status === 'waiting').length;
@@ -684,6 +711,11 @@ router.get('/:slug/t/:ticketId', async (req, res) => {
   try {
     const state = await ambilState(req.params.slug);
     if (!state) return res.status(404).json({ success: false, message: 'Booth tidak ditemukan.' });
+
+    // WAJIB sebelum membaca barisnya: kalau tidak, tiket kemarin terbaca
+    // masih 'waiting' dan halaman pengunjung menampilkannya sebagai antrean
+    // aktif yang sebenarnya tidak akan pernah dipanggil.
+    await tutupTiketBasi(state.device_id);
 
     const { data: tiket } = await supabase
       .from('queue_tickets')

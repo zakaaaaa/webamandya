@@ -25,7 +25,8 @@ type Tiket = {
   nomor: number
   kode: string
   nama: string | null
-  status: 'waiting' | 'called' | 'serving' | 'done' | 'skipped' | 'left'
+  // 'expired' = tiket dari hari sebelumnya, ditutup server saat hari berganti.
+  status: 'waiting' | 'called' | 'serving' | 'done' | 'skipped' | 'left' | 'expired'
   posisi: number | null
   estimasi_tunggu: number | null
   frame_id: string | null
@@ -45,9 +46,13 @@ const C = {
   bg: '#FAF7F5', kartu: '#FFFFFF', garis: 'rgba(212,43,34,0.14)',
 }
 
+// Mengembalikan string siap tampil, bukan angka. Versi sebelumnya
+// mengembalikan null dan dirender apa adanya, sehingga estimasi yang belum
+// bisa dihitung muncul sebagai "± mnt" tanpa angka — terlihat seperti
+// halaman rusak, padahal maksudnya cuma "belum tahu".
 function menitDari(detik: number | null | undefined) {
-  if (detik == null) return null
-  return Math.max(1, Math.round(detik / 60))
+  if (detik == null) return '–'
+  return String(Math.max(1, Math.round(detik / 60)))
 }
 
 // VAPID dikirim sebagai base64url; PushManager menuntut Uint8Array.
@@ -115,8 +120,10 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
       const data: Tiket = await r.json()
 
       // Tiket yang sudah tuntas dilepas dari penyimpanan supaya orang yang
-      // memindai QR lagi besok tidak tersangkut pada tiket kemarin.
-      if (['done', 'skipped', 'left'].includes(data.status)) {
+      // memindai QR lagi besok tidak tersangkut pada tiket kemarin. 'expired'
+      // WAJIB ada di daftar ini: tanpanya, tiket kemarin tetap dirender
+      // sebagai antrean aktif meski booth-nya sudah tutup.
+      if (['done', 'skipped', 'left', 'expired'].includes(data.status)) {
         localStorage.removeItem(kunciTiket)
       }
       setTiket(data)
@@ -428,12 +435,20 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
         {booth && tiket && !aktif && (
           <div style={{ background: C.kartu, border: `1px solid ${C.garis}`, borderRadius: 22, padding: 30, textAlign: 'center' }}>
             <div style={{ fontSize: 17, fontWeight: 800, marginBottom: 6 }}>
-              {tiket.status === 'done' ? 'Sesimu sudah selesai' : tiket.status === 'skipped' ? 'Nomormu terlewat' : 'Antrean dibatalkan'}
+              {tiket.status === 'done'
+                ? 'Sesimu sudah selesai'
+                : tiket.status === 'skipped'
+                  ? 'Nomormu terlewat'
+                  : tiket.status === 'expired'
+                    ? 'Nomor ini sudah tidak berlaku'
+                    : 'Antrean dibatalkan'}
             </div>
             <p style={{ fontSize: 13.5, color: C.teks3, lineHeight: 1.6, marginBottom: 18 }}>
               {tiket.status === 'skipped'
                 ? 'Nomormu dipanggil tapi belum ada yang datang. Ambil nomor baru atau temui petugas di booth.'
-                : 'Terima kasih sudah berfoto bersama kami!'}
+                : tiket.status === 'expired'
+                  ? 'Nomor antrean hanya berlaku pada hari yang sama. Ambil nomor baru kalau booth sedang buka.'
+                  : 'Terima kasih sudah berfoto bersama kami!'}
             </p>
             <button className="tombol" onClick={() => { setTiket(null); muatBooth() }} style={{ background: C.merah, color: '#fff' }}>
               Ambil nomor baru
