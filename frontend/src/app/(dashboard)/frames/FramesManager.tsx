@@ -17,17 +17,27 @@ type FrameItem = {
   is_active: boolean
   created_at: string
   photo_slots: PhotoSlot[] | null
+  paper_size: PaperSize | null
 }
+
+// Kertas cetak yang dikenali app (PrintService._paperInches) DAN driver
+// printer (tools/setup-printer.ps1 -PaperSize). Menambah nilai di sini tanpa
+// menambahnya di kedua tempat itu hanya akan membuat cetak ditolak.
+type PaperSize = '4R' | 'A5' | 'A4'
+const PAPER_SIZES: PaperSize[] = ['4R', 'A5', 'A4']
 
 type View = 'list' | 'create' | 'edit-slots'
 
-const SIZE_PRESETS = [
-  { w:344,  h:515,  label:'Strip'        },
-  { w:1200, h:1800, label:'4R'           },
-  { w:1748, h:2480, label:'A5'           },
-  { w:2480, h:3508, label:'A4'           },
-  { w:1080, h:1920, label:'Story 9:16'   },
-  { w:1080, h:1080, label:'Square 1:1'   },
+// `paper` = kertas cetak yang wajar untuk preset itu; dipakai sebagai nilai
+// awal saat preset dipilih, tetap bisa ditimpa manual di bawahnya. Strip dan
+// Story/Square dicetak di 4R karena itu kertas yang selalu ada di booth.
+const SIZE_PRESETS: { w:number; h:number; label:string; paper:PaperSize }[] = [
+  { w:344,  h:515,  label:'Strip',        paper:'4R' },
+  { w:1200, h:1800, label:'4R',           paper:'4R' },
+  { w:1748, h:2480, label:'A5',           paper:'A5' },
+  { w:2480, h:3508, label:'A4',           paper:'A4' },
+  { w:1080, h:1920, label:'Story 9:16',   paper:'4R' },
+  { w:1080, h:1080, label:'Square 1:1',   paper:'4R' },
 ]
 
 
@@ -60,6 +70,8 @@ export default function FramesManager({
   const [view, setView]                   = useState<View>('list')
   const [editingFrame, setEditingFrame]   = useState<FrameItem | null>(null)
   const [pendingSlots, setPendingSlots]   = useState<PhotoSlot[]>([])
+  // Kertas cetak yang sedang diedit; disimpan bersama slot dalam satu update.
+  const [editPaper, setEditPaper]         = useState<PaperSize>('4R')
 
   const [loading, setLoading]                 = useState(false)
   const [toggleLoading, setToggleLoading]     = useState<string | null>(null)
@@ -68,7 +80,7 @@ export default function FramesManager({
   const [error, setError]                     = useState('')
   const [successMsg, setSuccessMsg]           = useState('')
 
-  const [form, setForm]             = useState({ name:'', photo_count:4, output_width:344, output_height:515 })
+  const [form, setForm]             = useState<{ name:string; photo_count:number; output_width:number; output_height:number; paper_size:PaperSize }>({ name:'', photo_count:4, output_width:344, output_height:515, paper_size:'4R' })
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [preview, setPreview]       = useState<string | null>(null)
   const [dragOver, setDragOver]     = useState(false)
@@ -82,7 +94,7 @@ export default function FramesManager({
   }
 
   const resetCreate = () => {
-    setForm({ name:'', photo_count:4, output_width:344, output_height:515 })
+    setForm({ name:'', photo_count:4, output_width:344, output_height:515, paper_size:'4R' })
     setSelectedFile(null); setPreview(null); setError(''); setPendingSlots([])
   }
 
@@ -113,6 +125,7 @@ export default function FramesManager({
         image_url: urlData.publicUrl, thumbnail_url: thumbData.publicUrl,
         photo_count: form.photo_count, output_width: form.output_width,
         output_height: form.output_height, photo_slots: pendingSlots,
+        paper_size: form.paper_size,
         is_active: true, sort_order: frames.length + 1,
       }).select().single()
 
@@ -127,9 +140,11 @@ export default function FramesManager({
   const handleSaveSlots = async () => {
     if (!editingFrame) return
     setSaveSlotLoading(true); setError('')
-    const { error: err } = await supabase.from('frames').update({ photo_slots: pendingSlots }).eq('id', editingFrame.id)
+    const { error: err } = await supabase.from('frames')
+      .update({ photo_slots: pendingSlots, paper_size: editPaper })
+      .eq('id', editingFrame.id)
     if (!err) {
-      setFrames(prev => prev.map(f => f.id===editingFrame.id ? {...f,photo_slots:pendingSlots} : f))
+      setFrames(prev => prev.map(f => f.id===editingFrame.id ? {...f,photo_slots:pendingSlots,paper_size:editPaper} : f))
       showSuccess('Slot posisi disimpan!'); setView('list')
     } else setError(err.message)
     setSaveSlotLoading(false)
@@ -184,6 +199,16 @@ export default function FramesManager({
             <p style={{ color:'rgba(122,98,89,0.88)', fontSize:13 }}>
               {editingFrame.photo_count} foto · {editingFrame.output_width}x{editingFrame.output_height}px
             </p>
+            <div style={{ display:'flex', gap:6, alignItems:'center', marginTop:8, flexWrap:'wrap' }}>
+              <span style={{ color:'rgba(158,136,128,0.95)', fontSize:12, fontFamily:'Poppins,sans-serif' }}>Kertas cetak:</span>
+              {PAPER_SIZES.map(ps => (
+                <button key={ps} onClick={()=>setEditPaper(ps)}
+                  style={{ padding:'4px 12px', background: editPaper===ps ? 'rgba(212,43,34,.18)' : 'rgba(212,43,34,0.04)', border: editPaper===ps ? '1px solid rgba(212,43,34,.4)' : '1px solid rgba(255,255,255,.09)', borderRadius:6, color: editPaper===ps ? '#E83530' : 'rgba(122,98,89,0.88)', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
+                  {ps}
+                </button>
+              ))}
+              <span style={{ color:'rgba(158,136,128,0.85)', fontSize:11, fontFamily:'Poppins,sans-serif' }}>tersimpan bersama tombol Simpan Slot</span>
+            </div>
           </div>
           <div style={{ display:'flex', gap:9, alignItems:'center', flexWrap:'wrap' }}>
             {error && (
@@ -319,7 +344,7 @@ export default function FramesManager({
                 value={SIZE_PRESETS.find(p=>p.w===form.output_width&&p.h===form.output_height)?.label ?? 'custom'}
                 onChange={e => {
                   const p = SIZE_PRESETS.find(x=>x.label===e.target.value)
-                  if (p) setForm(prev=>({...prev, output_width:p.w, output_height:p.h}))
+                  if (p) setForm(prev=>({...prev, output_width:p.w, output_height:p.h, paper_size:p.paper}))
                 }}
                 style={{...inputCls, width:'100%', cursor:'pointer', marginBottom:8}}
                 onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}
@@ -347,12 +372,32 @@ export default function FramesManager({
               <p style={{ color:'rgba(158,136,128,0.85)', fontSize:11, fontFamily:'Poppins,sans-serif', marginBottom:4 }}>4R=300dpi · A5=300dpi · A4=300dpi</p>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {SIZE_PRESETS.map(p => (
-                  <button key={p.label} onClick={()=>setForm(prev=>({...prev,output_width:p.w,output_height:p.h}))}
+                  <button key={p.label} onClick={()=>setForm(prev=>({...prev,output_width:p.w,output_height:p.h,paper_size:p.paper}))}
                     style={{ padding:'5px 12px', background: form.output_width===p.w&&form.output_height===p.h ? 'rgba(212,43,34,.18)' : 'rgba(212,43,34,0.04)', border: form.output_width===p.w&&form.output_height===p.h ? '1px solid rgba(212,43,34,.4)' : '1px solid rgba(255,255,255,.09)', borderRadius:6, color: form.output_width===p.w&&form.output_height===p.h ? '#E83530' : 'rgba(122,98,89,0.88)', fontSize:12, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
                     {p.label}
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Kertas cetak — menempel di frame, bukan di perangkat.
+                App memakai nilai ini untuk memeriksa profil driver printer
+                sebelum job dikirim; kalau tidak cocok, cetak dibatalkan
+                dengan pesan, bukan membuang kertas. */}
+            <div>
+              <label style={labelCls}>Kertas Cetak</label>
+              <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                {PAPER_SIZES.map(ps => (
+                  <button key={ps} onClick={()=>setForm(prev=>({...prev, paper_size:ps}))}
+                    style={{ padding:'7px 16px', background: form.paper_size===ps ? 'rgba(212,43,34,.18)' : 'rgba(212,43,34,0.04)', border: form.paper_size===ps ? '1px solid rgba(212,43,34,.4)' : '1px solid rgba(255,255,255,.09)', borderRadius:7, color: form.paper_size===ps ? '#E83530' : 'rgba(122,98,89,0.88)', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
+                    {ps}
+                  </button>
+                ))}
+              </div>
+              <p style={{ color:'rgba(158,136,128,0.85)', fontSize:11, marginTop:8, fontFamily:'Poppins,sans-serif' }}>
+                Terisi otomatis dari preset ukuran. Operator tetap harus memuat
+                kertasnya dan menjalankan setup-printer.ps1 untuk ukuran itu.
+              </p>
             </div>
 
             {error && (
@@ -482,7 +527,7 @@ export default function FramesManager({
                 </div>
 
                 <div style={{ display:'flex', gap:6 }}>
-                  <button onClick={()=>{setEditingFrame(frame);setPendingSlots(frame.photo_slots??[]);setView('edit-slots');setError('')}}
+                  <button onClick={()=>{setEditingFrame(frame);setPendingSlots(frame.photo_slots??[]);setEditPaper(frame.paper_size ?? '4R');setView('edit-slots');setError('')}}
                     style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4, padding:'7px 0', background:'rgba(212,43,34,.1)', border:'1px solid rgba(212,43,34,.2)', borderRadius:8, color:'#E83530', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
                     <Settings2 size={12}/>Slot
                   </button>

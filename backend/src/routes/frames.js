@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
     // 2. Fetch frames milik client ini
     const { data: frames, error: framesError } = await supabase
       .from('frames')
-      .select('id, name, image_url, thumbnail_url, photo_count, output_width, output_height, sort_order, photo_slots')
+      .select('id, name, image_url, thumbnail_url, photo_count, output_width, output_height, sort_order, photo_slots, paper_size')
       .eq('client_id', device.client_id)
       .eq('is_active', true)
       .eq('type', 'static')
