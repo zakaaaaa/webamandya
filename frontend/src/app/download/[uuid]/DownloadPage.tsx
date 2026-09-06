@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Download, Check, Loader2, Film, Sparkles, AlertCircle } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Download, Check, Loader2, Film, Sparkles, AlertCircle, Printer, Bell, BellOff } from 'lucide-react'
 
 // pending    = mesin belum mulai
 // processing = mesin sedang merender/mengunggah
@@ -21,8 +21,32 @@ type Session = {
   video_status?: MediaStatus
   clients: { name: string; email: string } | null
   devices: { device_name: string } | null
+  print_status?: PrintStatus
+  print_sheets_done?: number | null
+  print_sheets_total?: number | null
+  print_eta_seconds?: number | null
+  print_reason?: string | null
+  print_started_at?: string | null
 }
 type Photo = { photo_url: string; photo_order: number }
+
+// Progres cetak, dilaporkan mesin photobooth dari antrian spooler Windows.
+// queued   = job sudah dikirim, belum terlihat di antrian
+// printing = job ada di antrian, printer sedang bekerja
+// done     = job lepas dari antrian; data cetakan habis diterima printer
+// stuck    = printer butuh ditolong (kertas habis, macet, antrian di-pause)
+// failed   = sudah terlalu lama dan tidak juga selesai
+// null     = sesi ini memang tidak mencetak apa pun
+type PrintStatus = 'queued' | 'printing' | 'done' | 'stuck' | 'failed' | null
+
+type PrintState = {
+  status: PrintStatus
+  sheetsDone: number
+  sheetsTotal: number
+  etaSeconds: number | null
+  reason: string | null
+  startedAt: string | null
+}
 
 // Selama mesin masih bekerja, halaman menanyakan statusnya berkala supaya
 // pelanggan melihat hasilnya muncul sendiri tanpa perlu refresh manual.
@@ -44,6 +68,23 @@ const POLL_MAX_ATTEMPTS = 75 // ~5 menit, lalu berhenti agar tidak polling selam
 const STEP_TAU_MS   = 11000  // kecepatan merayap dalam satu langkah
 const SLOW_AFTER_MS = 90000  // lewat ini, akui bahwa prosesnya lebih lama
 const CREEP_CEILING = 95     // pagar: tanpa bukti file siap, berhenti di sini
+
+// ── Kalibrasi indikator CETAK ────────────────────────────────────────────
+// Sumbernya antrian spooler Windows di mesin photobooth, BUKAN sensor di
+// dalam printer. Yang benar-benar diketahui cuma kejadian per LEMBAR: job
+// masih ada di antrian, atau sudah lepas darinya. `PagesPrinted` tidak
+// pernah bergerak untuk job satu halaman (diukur 2026-09-06 di EPSON L3210),
+// jadi persentase di bawah ini digerakkan WAKTU terhadap perkiraan yang
+// dikirim mesin, dengan jumlah lembar yang sudah lepas sebagai lantainya —
+// pola yang sama dengan cincin media di atas.
+//
+// Perkiraan durasinya sendiri (print_eta_seconds) datang dari app, karena
+// hanya app yang tahu ukuran kertas frame yang dipilih dan berapa lembar
+// yang dicetak. 4R jauh lebih lama daripada A4 kertas biasa.
+const PRINT_CEILING = 96
+// Cetak 4R terukur 4,5 menit untuk SATU lembar, dan pelanggan bisa memesan
+// beberapa lembar. Batas polling media (~5 menit) terlalu pendek untuk itu.
+const PRINT_POLL_MAX_ATTEMPTS = 300 // ~20 menit @ 4 detik
 
 // Layout sama persis Flutter
 const LAYOUTS: Record<number, {
@@ -94,6 +135,121 @@ function ProgressRing({ percent, caption, hint }: { percent:number; caption:stri
   )
 }
 
+// ── Kartu progres CETAK ──────────────────────────────────────────────────
+// Sengaja batang, bukan cincin: supaya tidak tertukar dengan cincin media di
+// atasnya. Kalimatnya juga sengaja tidak pernah mengklaim "kertas sudah
+// keluar" — yang diketahui mesin adalah data cetakan sudah habis diterima
+// printer, dan lembar fisiknya menyusul beberapa detik kemudian.
+function PrintCard({
+  status, sheetsDone, sheetsTotal, percent, remainSec, reason,
+  soundArmed, onArmSound,
+}: {
+  status: PrintStatus
+  sheetsDone: number
+  sheetsTotal: number
+  percent: number
+  remainSec: number | null
+  reason: string | null
+  soundArmed: boolean
+  onArmSound: () => void
+}) {
+  if (!status) return null
+
+  const running  = status === 'queued' || status === 'printing'
+  const trouble  = status === 'stuck' || status === 'failed'
+  const multi    = sheetsTotal > 1
+
+  const accent = status === 'done' ? '#1E7A4B' : trouble ? '#B4541C' : '#C02018'
+  const bg     = status === 'done' ? 'rgba(30,122,75,0.08)'
+               : trouble ? 'rgba(180,84,28,0.09)' : 'rgba(212,43,34,0.08)'
+
+  const title = status === 'done'  ? 'Cetakan sudah selesai'
+              : status === 'stuck' ? 'Cetakan tertahan'
+              : status === 'failed'? 'Cetakan belum selesai'
+              : status === 'queued'? 'Cetakan masuk antrian'
+              :                      'Sedang mencetak'
+
+  const sisa = remainSec == null ? null
+    : remainSec > 90 ? `sekitar ${Math.round(remainSec / 60)} menit lagi`
+    : remainSec > 20 ? `sekitar ${Math.round(remainSec / 10) * 10} detik lagi`
+    :                  'sebentar lagi'
+
+  const body = status === 'done'
+      ? (multi
+          ? `${sheetsTotal} lembar sudah dicetak. Silakan ambil di printer.`
+          : 'Silakan ambil hasil cetakmu di printer.')
+    : trouble
+      ? (reason ?? 'Cetakan berhenti sebelum selesai.') + ' Tunjukkan layar ini ke petugas di lokasi.'
+    : (multi ? `Lembar ${Math.min(sheetsDone + 1, sheetsTotal)} dari ${sheetsTotal}. ` : '')
+      + (sisa ? `Perkiraan ${sisa}. ` : '')
+      + 'Kamu boleh duduk dulu — halaman ini yang akan memberi tahu.'
+
+  return (
+    <div className="card rise-2" style={{ padding:'20px 20px 18px', marginTop:16 }}>
+      <div style={{ display:'flex', alignItems:'flex-start', gap:14 }}>
+        <span style={{
+          flexShrink:0, width:38, height:38, borderRadius:12, background:bg,
+          display:'inline-flex', alignItems:'center', justifyContent:'center', color:accent,
+        }}>
+          {status === 'done'
+            ? <Check size={19} strokeWidth={3}/>
+            : trouble
+              ? <AlertCircle size={19}/>
+              : <Printer size={19}/>}
+        </span>
+
+        <div style={{ flex:1, minWidth:0 }}>
+          <p style={{ fontSize:14.5, fontWeight:700, color:'#150C09', marginBottom:3 }}>
+            {title}
+          </p>
+          <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.6 }}>{body}</p>
+
+          {running && (
+            <div style={{
+              marginTop:12, height:7, borderRadius:99,
+              background:'rgba(212,43,34,0.10)', overflow:'hidden',
+            }}>
+              <div style={{
+                width:`${percent}%`, height:'100%', borderRadius:99,
+                background:'linear-gradient(90deg,#E83530,#C02018)',
+                transition:'width .8s cubic-bezier(.4,0,.2,1)',
+              }}/>
+            </div>
+          )}
+
+          {/* Browser memblokir suara yang tidak berasal dari sentuhan
+              pelanggan, jadi izinnya harus diminta SEKARANG — selagi
+              cetakan masih jalan — bukan nanti saat sudah selesai. */}
+          {running && (
+            <button
+              onClick={onArmSound}
+              disabled={soundArmed}
+              style={{
+                marginTop:14, display:'inline-flex', alignItems:'center', gap:7,
+                padding:'8px 13px', borderRadius:99, cursor: soundArmed ? 'default' : 'pointer',
+                border:`1px solid ${soundArmed ? 'rgba(30,122,75,0.25)' : 'rgba(212,43,34,0.22)'}`,
+                background: soundArmed ? 'rgba(30,122,75,0.07)' : '#fff',
+                color: soundArmed ? '#1E7A4B' : '#C02018',
+                fontSize:12, fontWeight:600, fontFamily:'inherit',
+              }}
+            >
+              {soundArmed ? <Bell size={13}/> : <BellOff size={13}/>}
+              {soundArmed ? 'Nanti dibunyikan saat selesai' : 'Bunyikan saat selesai'}
+            </button>
+          )}
+
+          {running && soundArmed && (
+            <p style={{ fontSize:11.5, color:'#B0A09A', lineHeight:1.55, marginTop:8 }}>
+              Biarkan halaman ini terbuka. Kalau layar HP terkunci, bunyinya
+              bisa ikut tertahan — statusnya tetap benar begitu HP dibuka lagi.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Satu blok hasil ──────────────────────────────────────────────────────
 function Section({ title, meta, children }: { title:string; meta?:string; children:React.ReactNode }) {
   return (
@@ -122,6 +278,17 @@ export default function DownloadPage({
     gif_status:   (session.gif_status ?? null) as MediaStatus,
     video_url:    session.video_url ?? null,
     video_status: (session.video_status ?? null) as MediaStatus,
+  })
+  // Progres cetak. Nilai awal dari render server supaya pelanggan yang baru
+  // membuka QR di tengah cetakan langsung melihat kartunya, tanpa menunggu
+  // polling pertama.
+  const [printState, setPrintState] = useState<PrintState>({
+    status:     (session.print_status ?? null) as PrintStatus,
+    sheetsDone:  session.print_sheets_done  ?? 0,
+    sheetsTotal: session.print_sheets_total ?? 0,
+    etaSeconds:  session.print_eta_seconds  ?? null,
+    reason:      session.print_reason       ?? null,
+    startedAt:   session.print_started_at   ?? null,
   })
   const [lightbox, setLightbox]       = useState<string|null>(null)
   const [downloading, setDownloading] = useState<string|null>(null)
@@ -172,9 +339,15 @@ export default function DownloadPage({
   const currentStep  = steps.find(s => !s.done)
   const stillWorking = !allDone
 
-  // Polling status selama mesin masih bekerja.
+  const printRunning = printState.status === 'queued' || printState.status === 'printing'
+
+  // Polling status selama mesin masih bekerja ATAU printer masih mencetak.
+  // Keduanya harus ikut: media biasanya beres dalam ~30 detik, sementara
+  // cetakan 4R baru selesai menit-menitan kemudian — dulu polling berhenti
+  // duluan dan progres cetaknya membeku di layar pelanggan.
   useEffect(() => {
-    if (!stillWorking) return
+    if (!stillWorking && !printRunning) return
+    const maxAttempts = printRunning ? PRINT_POLL_MAX_ATTEMPTS : POLL_MAX_ATTEMPTS
     let attempts = 0
     let cancelled = false
 
@@ -192,15 +365,23 @@ export default function DownloadPage({
           video_url:    d.video_url ?? null,
           video_status: d.video_status ?? null,
         })
+        setPrintState({
+          status:      (d.print_status ?? null) as PrintStatus,
+          sheetsDone:   d.print_sheets_done  ?? 0,
+          sheetsTotal:  d.print_sheets_total ?? 0,
+          etaSeconds:   d.print_eta_seconds  ?? null,
+          reason:       d.print_reason       ?? null,
+          startedAt:    d.print_started_at   ?? null,
+        })
       } catch {
         // Jaringan pelanggan bisa naik-turun — diamkan, percobaan berikutnya jalan.
       }
-      if (attempts >= POLL_MAX_ATTEMPTS) clearInterval(iv)
+      if (attempts >= maxAttempts) clearInterval(iv)
     }
 
     const iv = setInterval(tick, POLL_INTERVAL_MS)
     return () => { cancelled = true; clearInterval(iv) }
-  }, [stillWorking, uuid])
+  }, [stillWorking, printRunning, uuid])
 
   // ── Angka pada cincin ──────────────────────────────────────────────────
   const [now, setNow] = useState(0)
@@ -219,10 +400,10 @@ export default function DownloadPage({
   useEffect(() => { stepSinceRef.current = Date.now() }, [doneCount])
 
   useEffect(() => {
-    if (!stillWorking) return
+    if (!stillWorking && !printRunning) return
     const iv = setInterval(() => setNow(Date.now()), 500)
     return () => clearInterval(iv)
-  }, [stillWorking])
+  }, [stillWorking, printRunning])
 
   const total    = Math.max(steps.length, 1)
   const floorPct = (doneCount / total) * 100
@@ -233,6 +414,111 @@ export default function DownloadPage({
 
   const takingLong =
     stillWorking && openedAtRef.current > 0 && (now - openedAtRef.current) > SLOW_AFTER_MS
+
+  // ── Angka pada batang cetak ────────────────────────────────────────────
+  // Waktu mulai diambil dari server (print_started_at), bukan dari saat
+  // halaman ini dibuka: pelanggan sering baru scan QR setelah cetakan jalan
+  // beberapa saat, dan menghitung dari nol membuat batangnya berjalan jauh
+  // lebih lambat daripada printernya. Jam HP yang meleset dijaga oleh clamp
+  // di bawah supaya tidak pernah menghasilkan waktu negatif atau lompat.
+  const printEta = printState.etaSeconds && printState.etaSeconds > 0
+    ? printState.etaSeconds : null
+  const printStartMs = printState.startedAt ? Date.parse(printState.startedAt) : NaN
+  const printElapsed = (now > 0 && Number.isFinite(printStartMs))
+    ? Math.max(0, Math.min((now - printStartMs) / 1000, (printEta ?? 600) * 1.5))
+    : 0
+
+  // Lantai dari lembar yang sudah lepas dari antrian — inilah satu-satunya
+  // bagian yang benar-benar terukur. Sisanya rayapan waktu.
+  const printFloor = printState.sheetsTotal > 0
+    ? (printState.sheetsDone / printState.sheetsTotal) * 100 : 0
+  const printByTime = printEta ? (printElapsed / printEta) * 100 : 0
+  const printPercent = printState.status === 'done'
+    ? 100
+    : Math.min(PRINT_CEILING, Math.round(Math.max(printFloor, printByTime)))
+  const printRemain = printEta ? Math.max(0, Math.round(printEta - printElapsed)) : null
+
+  // ── Penanda selesai: bunyi + getar ─────────────────────────────────────
+  // Browser TIDAK mengizinkan suara yang tidak berakar pada sentuhan
+  // pelanggan. Jadi AudioContext-nya dibuat dan di-resume saat pelanggan
+  // menekan tombol lonceng (atau menyentuh halaman), lalu disimpan untuk
+  // dibunyikan nanti — beberapa menit kemudian — saat cetakan selesai.
+  const audioRef = useRef<AudioContext|null>(null)
+  const [soundArmed, setSoundArmed] = useState(false)
+
+  const armSound = useCallback(async () => {
+    try {
+      const Ctor = window.AudioContext
+        ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!Ctor) return
+      const ctx = audioRef.current ?? new Ctor()
+      audioRef.current = ctx
+      if (ctx.state === 'suspended') await ctx.resume()
+      setSoundArmed(ctx.state === 'running')
+    } catch {
+      // HP yang memblokir audio tetap dapat penanda visual — jangan ribut.
+    }
+  }, [])
+
+  const playChime = useCallback(() => {
+    const ctx = audioRef.current
+    if (!ctx || ctx.state !== 'running') return
+    try {
+      const t0 = ctx.currentTime
+      // Tiga nada naik, cukup menonjol di ruangan ramai tanpa mengagetkan.
+      ;[880, 1174.7, 1568].forEach((freq, i) => {
+        const at   = t0 + i * 0.17
+        const osc  = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = 'sine'
+        osc.frequency.value = freq
+        gain.gain.setValueAtTime(0.0001, at)
+        gain.gain.exponentialRampToValueAtTime(0.3, at + 0.02)
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.32)
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start(at)
+        osc.stop(at + 0.34)
+      })
+    } catch {
+      // Tidak ada yang perlu dilakukan kalau audio ditolak di tengah jalan.
+    }
+  }, [])
+
+  // Bunyi hanya pada PERPINDAHAN ke selesai. Halaman yang dibuka saat
+  // cetakannya memang sudah selesai tidak boleh ikut berbunyi.
+  const prevPrintStatus = useRef<PrintStatus>(printState.status)
+  const [printJustDone, setPrintJustDone] = useState(false)
+
+  useEffect(() => {
+    const prev = prevPrintStatus.current
+    prevPrintStatus.current = printState.status
+    if (printState.status !== 'done' || prev === 'done' || prev == null) return
+    playChime()
+    // Getar hanya ada di Android; iOS Safari tidak mendukungnya sama sekali.
+    try { navigator.vibrate?.([180, 90, 180]) } catch { /* diabaikan */ }
+    setPrintJustDone(true)
+  }, [printState.status, playChime])
+
+  // Kalau pelanggan sedang membuka aplikasi lain, judul tab yang berkedip
+  // adalah satu-satunya penanda yang masih terlihat.
+  useEffect(() => {
+    if (!printJustDone) return
+    const original = document.title
+    let on = false
+    const iv = setInterval(() => {
+      if (document.hidden) {
+        on = !on
+        document.title = on ? 'Cetakan selesai!' : original
+      } else {
+        document.title = original
+      }
+    }, 900)
+    const stop = setTimeout(() => setPrintJustDone(false), 120000)
+    return () => {
+      clearInterval(iv); clearTimeout(stop); document.title = original
+    }
+  }, [printJustDone])
 
   // Pratinjau slideshow kecil selama GIF belum ada.
   useEffect(() => {
@@ -629,6 +915,18 @@ export default function DownloadPage({
               </div>
             </div>
           )}
+
+          {/* ── PROGRES CETAK ── */}
+          <PrintCard
+            status={printState.status}
+            sheetsDone={printState.sheetsDone}
+            sheetsTotal={printState.sheetsTotal}
+            percent={printPercent}
+            remainSec={printRemain}
+            reason={printState.reason}
+            soundArmed={soundArmed}
+            onArmSound={armSound}
+          />
 
           {/* ── PHOTO STRIP ── */}
           <Section title="Photo strip" meta={media.result_url ? 'hasil final dengan frame' : 'pratinjau sementara'}>

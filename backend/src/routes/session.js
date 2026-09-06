@@ -243,6 +243,93 @@ router.patch('/media-status', validateDevice, async (req, res) => {
 });
 
 
+// PATCH /api/photobooth/session/print-status
+//
+// Dipanggil PrintJobWatcher di app selama kertas keluar, supaya halaman unduh
+// bisa menampilkan progres cetak. Cetak 4R makan menit-menitan (terukur
+// 2026-09-06: satu lembar bertahan 4 menit 30 detik di antrian spooler), jadi
+// tanpa ini pelanggan hanya bisa berdiri menunggu tanpa keterangan apa pun.
+//
+// Sumber datanya antrian spooler Windows, BUKAN sensor printer: 'done' berarti
+// data cetakan sudah habis diterima printer. Lihat sql/2026-09-07_print_progress.sql.
+const PRINT_STATES = ['queued', 'printing', 'done', 'stuck', 'failed'];
+
+router.patch('/print-status', validateDevice, async (req, res) => {
+  const {
+    session_uuid,
+    print_status,
+    print_sheets_done,
+    print_sheets_total,
+    print_eta_seconds,
+    print_reason,
+  } = req.body;
+  const { client_id } = req.device;
+
+  if (!session_uuid) {
+    return res.status(400).json({ success: false, message: 'session_uuid wajib diisi.' });
+  }
+  if (!PRINT_STATES.includes(print_status)) {
+    return res.status(400).json({ success: false, message: 'print_status tidak valid.' });
+  }
+
+  const patch = { print_status };
+
+  // Angka lembar datang dari app; dijaga di sini supaya nilai aneh tidak
+  // pernah sampai ke UI pelanggan sebagai "lembar -1 dari 0".
+  const asCount = (v) => {
+    const n = Number.parseInt(v, 10);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  const done = asCount(print_sheets_done);
+  const total = asCount(print_sheets_total);
+  if (done !== null) patch.print_sheets_done = done;
+  if (total !== null) patch.print_sheets_total = total;
+  const eta = asCount(print_eta_seconds);
+  if (eta !== null) patch.print_eta_seconds = eta;
+  patch.print_reason = print_reason || null;
+
+  const { data: existing } = await supabase
+    .from('sessions')
+    .select('id, print_started_at')
+    .eq('transaction_code', session_uuid)
+    .eq('client_id', client_id)
+    .maybeSingle();
+
+  if (!existing) {
+    return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
+  }
+
+  // 'queued' adalah laporan PERTAMA dari sebuah cetakan, jadi ia selalu
+  // menyetel ulang titik nolnya. Ini bukan detail kosmetik: pelanggan bisa
+  // membeli cetakan tambahan di sesi yang sama, dan kalau waktu mulainya
+  // tetap milik cetakan pertama, batang progres di HP-nya langsung mentok
+  // sejak detik pertama cetakan kedua.
+  //
+  // Laporan berikutnya (printing/done/...) TIDAK boleh menggeser titik nol,
+  // karena selisih mulai-selesai inilah bahan kalibrasi durasi per kertas.
+  if (print_status === 'queued') {
+    patch.print_started_at  = new Date().toISOString();
+    patch.print_finished_at = null;
+  } else if (!existing.print_started_at) {
+    patch.print_started_at = new Date().toISOString();
+  }
+  if (print_status === 'done' || print_status === 'failed') {
+    patch.print_finished_at = new Date().toISOString();
+  }
+
+  const { error } = await supabase
+    .from('sessions')
+    .update(patch)
+    .eq('id', existing.id);
+
+  if (error) {
+    console.error('[Session] print-status error:', error);
+    return res.status(500).json({ success: false, message: 'Gagal memperbarui status cetak.' });
+  }
+
+  return res.json({ success: true, ...patch });
+});
+
 // POST /api/photobooth/session/abandon  (dipanggil abandonSession() Flutter)
 //
 // Dipanggil ketika alur pembayaran QRIS berakhir TANPA pembayaran: link gagal
