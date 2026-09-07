@@ -64,6 +64,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Pendaftaran talent pool crew freelance. Dibagikan sebagai tautan terbuka
+  // ke orang yang justru belum punya hubungan apa pun dengan Pabrik Kenangan --
+  // menuntut sesi di sini akan memantulkan setiap pelamar ke /login.
+  if (pathname.startsWith('/karir')) {
+    return NextResponse.next()
+  }
+
   // Halaman masuk tidak boleh menuntut sesi, kalau tidak jadi lingkaran.
   if (pathname.startsWith('/login')) {
     return NextResponse.next()
