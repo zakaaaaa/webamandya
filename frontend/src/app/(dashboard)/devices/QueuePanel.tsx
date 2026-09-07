@@ -150,7 +150,7 @@ export default function QueuePanel({
           const urlOperator = `${urlAntri}/operator`
 
           return (
-            <div key={d.id} style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 18 }}>
+            <div key={d.id} style={{ border: `1px solid ${C.line}`, borderRadius: 16, padding: 18, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
                 <div style={{ flex: '1 1 220px', minWidth: 0 }}>
                   <p style={{ fontSize: 14.5, fontWeight: 600, color: C.text }}>
@@ -261,12 +261,12 @@ export default function QueuePanel({
                 </p>
               )}
 
-              <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.line}`, display: 'grid', gap: 10 }}>
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.line}`, display: 'grid', gap: 10, minWidth: 0 }}>
                 {[
                   { label: 'QR standee', nilai: urlAntri, kunci: `${d.id}-a` },
                   { label: 'Panel operator', nilai: urlOperator, kunci: `${d.id}-o` },
                 ].map((baris) => (
-                  <div key={baris.kunci} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div key={baris.kunci} style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     <span style={{ fontSize: 12, color: C.faint, minWidth: 104 }}>{baris.label}</span>
                     <span style={{
                       flex: 1, fontSize: 12.5, color: C.muted, fontFamily: 'monospace',
@@ -294,6 +294,7 @@ export default function QueuePanel({
                 */}
                 <a href={urlOperator} target="_blank" rel="noopener noreferrer"
                   style={{
+                    minWidth: 0,
                     marginTop: 4, border: `1px solid ${C.line}`, background: '#fff', color: C.text,
                     fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, padding: '12px 16px',
                     borderRadius: 12, textDecoration: 'none', display: 'flex',
