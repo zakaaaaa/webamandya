@@ -1,13 +1,18 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Phone, Plus, SkipForward, X } from 'lucide-react'
+import { MessageCircle, Minus, Plus, SkipForward, Users, X } from 'lucide-react'
 
 /*
  * PANEL OPERATOR
  *
  * Dibuka di HP operator, bukan di kios: operator harus bisa bergerak, dan
  * kalau aplikasi kios crash di tengah acara antrean tetap harus bisa berjalan.
+ *
+ * TIDAK ADA PIN. Panel ini hanya memanggil dan melewati antrean satu booth,
+ * dan satu layar PIN di HP operator saat antrean panjang lebih sering
+ * menghambat daripada melindungi. Konsekuensinya diterima: siapa pun yang
+ * tahu URL-nya bisa membuka halaman ini. Tautannya dibuka dari dasbor.
  *
  * SAKELAR MODE SENGAJA TIDAK ADA DI SINI. Menyalakan dan mematikan antrean
  * adalah keputusan pemilik, bukan keputusan orang yang sedang berdiri melayani
@@ -40,6 +45,8 @@ type Papan = {
   mode: 'off' | 'on' | 'closing'
   notify_lead: number
   estimasi_per_sesi: number
+  walkin_ahead: number
+  sisa_sesi_berjalan: number
   push_aktif: boolean
   tiket: TiketOp[]
 }
@@ -65,6 +72,19 @@ function lamaMenunggu(sejak: string) {
   return `${Math.floor(menit / 60)} jam ${menit % 60} menit`
 }
 
+// Nomor sudah disimpan server dalam bentuk 62xxxxxxxxx, jadi wa.me bisa
+// dipakai apa adanya tanpa menebak format. Pesannya menyertakan kode 4 angka:
+// kalau notifikasi HP tidak sampai, chat inilah satu-satunya cara pengunjung
+// tahu kodenya tanpa bolak-balik ke booth.
+function tautanWa(t: TiketOp) {
+  const sapaan = t.nama ? `Halo ${t.nama}` : 'Halo'
+  const pesan =
+    `${sapaan}, giliranmu sudah tiba di Pabrik Kenangan. ` +
+    `Nomor antrean ${t.nomor}, kode ${t.kode}. ` +
+    `Silakan menuju booth dan masukkan kodenya di layar ya.`
+  return `https://wa.me/${t.telepon}?text=${encodeURIComponent(pesan)}`
+}
+
 const LABEL_MODE: Record<Papan['mode'], string> = {
   on: 'Antrean aktif',
   closing: 'Pendaftaran ditutup',
@@ -72,8 +92,6 @@ const LABEL_MODE: Record<Papan['mode'], string> = {
 }
 
 export default function OperatorPanel({ slug }: { slug: string }) {
-  const [pin, setPin] = useState('')
-  const [masuk, setMasuk] = useState(false)
   const [papan, setPapan] = useState<Papan | null>(null)
   const [galat, setGalat] = useState<string | null>(null)
   const [sibuk, setSibuk] = useState(false)
@@ -81,46 +99,32 @@ export default function OperatorPanel({ slug }: { slug: string }) {
   const [teleponBaru, setTeleponBaru] = useState('')
   const [bukaTambah, setBukaTambah] = useState(false)
 
-  const kunciPin = `antri:${slug}:pin`
-
-  const muat = useCallback(async (pinDipakai: string) => {
+  const muat = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/api/queue/${slug}/op/board`, {
-        headers: { 'x-queue-pin': pinDipakai },
-        cache: 'no-store',
-      })
-      if (r.status === 401) {
-        localStorage.removeItem(kunciPin)
-        setMasuk(false)
-        setGalat('PIN salah.')
-        return
-      }
-      if (r.ok) { setPapan(await r.json()); setMasuk(true); setGalat(null) }
+      const r = await fetch(`${API}/api/queue/${slug}/op/board`, { cache: 'no-store' })
+      if (r.status === 404) { setGalat('Booth tidak ditemukan.'); return }
+      if (r.ok) { setPapan(await r.json()); setGalat(null) }
     } catch {
       // Sinyal tenant naik-turun; pertahankan tampilan terakhir.
     }
-  }, [slug, kunciPin])
+  }, [slug])
+
+  useEffect(() => { muat() }, [muat])
 
   useEffect(() => {
-    const tersimpan = localStorage.getItem(kunciPin)
-    if (tersimpan) { setPin(tersimpan); muat(tersimpan) }
-  }, [kunciPin, muat])
-
-  useEffect(() => {
-    if (!masuk) return
-    const t = setInterval(() => muat(pin), POLL_MS)
+    const t = setInterval(muat, POLL_MS)
     return () => clearInterval(t)
-  }, [masuk, pin, muat])
+  }, [muat])
 
   async function kirim(path: string, body?: unknown) {
     setSibuk(true)
     try {
       const r = await fetch(`${API}/api/queue/${slug}${path}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-queue-pin': pin },
+        headers: { 'Content-Type': 'application/json' },
         body: body ? JSON.stringify(body) : undefined,
       })
-      await muat(pin)
+      await muat()
       return r.ok
     } finally { setSibuk(false) }
   }
@@ -146,46 +150,17 @@ export default function OperatorPanel({ slug }: { slug: string }) {
     `}</style>
   )
 
-  // ── Layar PIN ──
-  if (!masuk) {
-    return (
-      <div style={{
-        minHeight: '100dvh', background: C.ground, fontFamily: "'Poppins',sans-serif", color: C.teks,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-      }}>
-        {gaya}
-        <div style={{ width: '100%', maxWidth: 320 }}>
-          <p style={{ fontSize: 18, fontWeight: 700 }}>Panel antrean</p>
-          <p style={{ fontSize: 13, color: C.teks3, marginTop: 4, marginBottom: 24 }}>/{slug}</p>
-
-          <label htmlFor="o-pin" style={{ fontSize: 13, fontWeight: 600, color: C.teks2, display: 'block', marginBottom: 7 }}>
-            PIN operator
-          </label>
-          <input
-            id="o-pin" className="o-field" value={pin} inputMode="numeric" maxLength={10}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-            onKeyDown={(e) => { if (e.key === 'Enter' && pin.length >= 4) { localStorage.setItem(kunciPin, pin); muat(pin) } }}
-            style={{ textAlign: 'center', fontSize: 22, letterSpacing: '.3em' }} />
-
-          {galat && <p style={{ fontSize: 13, color: C.aksen, marginTop: 10, fontWeight: 600 }}>{galat}</p>}
-
-          <button className="o-btn" disabled={pin.length < 4}
-            onClick={() => { localStorage.setItem(kunciPin, pin); muat(pin) }}
-            style={{ width: '100%', marginTop: 14, background: C.aksen, color: '#fff', padding: 16, fontSize: 16 }}>
-            Masuk
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   if (!papan) {
     return (
       <div style={{ minHeight: '100dvh', background: C.ground, fontFamily: "'Poppins',sans-serif" }}>
         {gaya}
         <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px', display: 'grid', gap: 12 }}>
-          <div className="o-skel" style={{ height: 92 }} />
-          <div className="o-skel" style={{ height: 220 }} />
+          {galat
+            ? <p style={{ fontSize: 14, color: C.aksen, fontWeight: 600 }}>{galat}</p>
+            : <>
+                <div className="o-skel" style={{ height: 92 }} />
+                <div className="o-skel" style={{ height: 220 }} />
+              </>}
         </div>
       </div>
     )
@@ -193,6 +168,7 @@ export default function OperatorPanel({ slug }: { slug: string }) {
 
   const menunggu = papan.tiket.filter((t) => t.status === 'waiting')
   const berjalan = papan.tiket.find((t) => t.status === 'called' || t.status === 'serving')
+  const walkin = papan.walkin_ahead || 0
 
   return (
     <div style={{ minHeight: '100dvh', background: C.ground, color: C.teks, fontFamily: "'Poppins',sans-serif" }}>
@@ -211,10 +187,48 @@ export default function OperatorPanel({ slug }: { slug: string }) {
           </p>
           {!papan.push_aktif && (
             <p style={{ fontSize: 12.5, color: C.aksen, marginTop: 8, lineHeight: 1.5, fontWeight: 600 }}>
-              Notifikasi HP sedang mati di server. Panggil dengan suara, atau telepon dari daftar di bawah.
+              Notifikasi HP sedang mati di server. Panggil dengan suara, atau hubungi lewat WhatsApp dari daftar di bawah.
             </p>
           )}
         </header>
+
+        {/*
+          Barisan fisik yang belum bertiket.
+
+          Angkanya dimasukkan pemilik saat menyalakan antrean dan berkurang
+          sendiri tiap sesi tanpa-tiket selesai. Tapi salah hitung saat booth
+          ramai itu wajar, dan selama angkanya belum nol TIDAK ADA pemegang
+          nomor yang akan dipanggil — jadi koreksinya harus ada di sini, di
+          tangan orang yang sedang berdiri melihat barisannya sendiri.
+        */}
+        {(papan.mode !== 'off' || walkin > 0) && (
+          <section style={{
+            background: walkin > 0 ? C.papan : 'transparent',
+            border: `1px solid ${walkin > 0 ? C.garis : C.garisTipis}`,
+            borderRadius: R_PERMUKAAN, padding: '14px 16px', marginBottom: 14,
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <Users size={18} strokeWidth={1.8} color={walkin > 0 ? C.aksen : C.teks3} style={{ flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 700 }}>
+                {walkin > 0 ? `${walkin} orang antre tanpa nomor` : 'Tidak ada antrean tanpa nomor'}
+              </p>
+              <p style={{ fontSize: 11.5, color: C.teks3, marginTop: 2, lineHeight: 1.45 }}>
+                {walkin > 0
+                  ? 'Termasuk yang sedang berfoto. Pemegang nomor dipanggil setelah habis.'
+                  : 'Semua yang antre sudah punya nomor.'}
+              </p>
+            </div>
+            <button className="o-icon" disabled={sibuk || walkin <= 0} aria-label="Kurangi satu"
+              onClick={() => kirim('/op/settings', { walkin_ahead: walkin - 1 })}>
+              <Minus size={16} strokeWidth={2} />
+            </button>
+            <button className="o-icon" disabled={sibuk || walkin >= 30} aria-label="Tambah satu"
+              onClick={() => kirim('/op/settings', { walkin_ahead: walkin + 1 })}>
+              <Plus size={16} strokeWidth={2} />
+            </button>
+          </section>
+        )}
 
         {/* Yang sedang dilayani */}
         {berjalan && (
@@ -235,12 +249,12 @@ export default function OperatorPanel({ slug }: { slug: string }) {
             {berjalan.status === 'called' && (
               <div style={{ display: 'flex', gap: 8 }}>
                 {berjalan.telepon && (
-                  <a href={`tel:${berjalan.telepon}`} className="o-btn"
+                  <a href={tautanWa(berjalan)} target="_blank" rel="noopener noreferrer" className="o-btn"
                     style={{
                       flex: 1, background: 'rgba(255,255,255,.18)', color: '#fff', textDecoration: 'none',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     }}>
-                    <Phone size={15} strokeWidth={2} /> Telepon
+                    <MessageCircle size={15} strokeWidth={2} /> WhatsApp
                   </a>
                 )}
                 <button className="o-btn" onClick={() => kirim(`/op/t/${berjalan.id}/skip`)} disabled={sibuk}
@@ -256,9 +270,9 @@ export default function OperatorPanel({ slug }: { slug: string }) {
         )}
 
         {!berjalan && menunggu.length > 0 && (
-          <button className="o-btn" onClick={() => kirim('/op/call-next')} disabled={sibuk}
+          <button className="o-btn" onClick={() => kirim('/op/call-next')} disabled={sibuk || walkin > 0}
             style={{ width: '100%', background: C.aksen, color: '#fff', marginBottom: 14, padding: 17, fontSize: 16 }}>
-            Panggil nomor {menunggu[0].nomor}
+            {walkin > 0 ? `Habiskan dulu ${walkin} antrean tanpa nomor` : `Panggil nomor ${menunggu[0].nomor}`}
           </button>
         )}
 
@@ -289,8 +303,9 @@ export default function OperatorPanel({ slug }: { slug: string }) {
                   </p>
                 </div>
                 {t.telepon && (
-                  <a href={`tel:${t.telepon}`} className="o-icon" aria-label={`Telepon ${t.nama || 'pengunjung'}`}>
-                    <Phone size={16} strokeWidth={1.8} />
+                  <a href={tautanWa(t)} target="_blank" rel="noopener noreferrer"
+                    className="o-icon" aria-label={`WhatsApp ${t.nama || 'pengunjung'}`}>
+                    <MessageCircle size={16} strokeWidth={1.8} />
                   </a>
                 )}
                 <button onClick={() => kirim(`/op/t/${t.id}/skip`)} disabled={sibuk}
@@ -321,18 +336,19 @@ export default function OperatorPanel({ slug }: { slug: string }) {
               </button>
             </div>
             <p style={{ fontSize: 12.5, color: C.teks2, marginBottom: 14, lineHeight: 1.5 }}>
-              Untuk pengunjung yang sudah berdiri antre sebelum antrean dinyalakan.
+              Untuk pengunjung yang tidak bisa memindai QR. Nomor HP-nya yang
+              dipakai tombol WhatsApp saat gilirannya tiba.
             </p>
             <div style={{ display: 'grid', gap: 10 }}>
               <div style={{ display: 'grid', gap: 6 }}>
                 <label htmlFor="o-nama" style={{ fontSize: 12.5, fontWeight: 600, color: C.teks2 }}>Nama</label>
                 <input id="o-nama" className="o-field" value={namaBaru} maxLength={40}
-                  onChange={(e) => setNamaBaru(e.target.value)} placeholder="Boleh dikosongkan" />
+                  onChange={(e) => setNamaBaru(e.target.value)} placeholder="Nama pengunjung" />
               </div>
               <div style={{ display: 'grid', gap: 6 }}>
                 <label htmlFor="o-hp" style={{ fontSize: 12.5, fontWeight: 600, color: C.teks2 }}>Nomor HP</label>
                 <input id="o-hp" className="o-field" value={teleponBaru} inputMode="tel" maxLength={20}
-                  onChange={(e) => setTeleponBaru(e.target.value)} placeholder="Boleh dikosongkan" />
+                  onChange={(e) => setTeleponBaru(e.target.value)} placeholder="08xxxxxxxxxx" />
               </div>
               <button className="o-btn" disabled={sibuk}
                 onClick={async () => {

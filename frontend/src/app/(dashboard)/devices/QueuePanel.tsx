@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Check, Copy, Loader2, Users } from 'lucide-react'
+import { Check, Copy, ExternalLink, Loader2, Users } from 'lucide-react'
 
 // ============================================================
 // PANEL ANTREAN PELANGGAN
@@ -27,6 +27,7 @@ export type QueueStateRow = {
   operator_pin: string | null
   notify_lead: number
   max_queue_length: number
+  walkin_ahead: number
 }
 
 export type DeviceLite = {
@@ -65,11 +66,14 @@ export default function QueuePanel({
   const [loading, setLoading] = useState<string | null>(null)
   const [note, setNote] = useState<Record<string, string>>({})
   const [copied, setCopied] = useState<string | null>(null)
+  // Device yang sedang ditanyai "berapa orang sudah antre?" sebelum dinyalakan.
+  const [menyalakan, setMenyalakan] = useState<string | null>(null)
+  const [jumlahAwal, setJumlahAwal] = useState<Record<string, string>>({})
 
   const byDevice = new Map(rows.map((r) => [r.device_id, r]))
   const daftar = devices.filter((d) => byDevice.has(d.id))
 
-  async function ubahMode(row: QueueStateRow, diminta: 'on' | 'off') {
+  async function ubahMode(row: QueueStateRow, diminta: 'on' | 'off', walkin = 0) {
     setLoading(row.device_id)
     setNote((n) => ({ ...n, [row.device_id]: '' }))
     try {
@@ -92,16 +96,24 @@ export default function QueuePanel({
         }
       }
 
+      // Orang yang sudah berdiri antre sebelum antrean dinyalakan tidak akan
+      // pernah memindai QR, jadi tidak punya baris di queue_tickets. Inilah
+      // satu-satunya momen sistem bisa mengetahui mereka ada. Saat dimatikan
+      // hitungannya dinolkan — kalau tidak, angkanya menghantui acara
+      // berikutnya berhari-hari kemudian.
+      const walkin_ahead = diminta === 'on' ? walkin : 0
+
       const { error } = await supabase
         .from('device_queue_state')
-        .update({ mode, updated_at: new Date().toISOString() })
+        .update({ mode, walkin_ahead, updated_at: new Date().toISOString() })
         .eq('device_id', row.device_id)
 
       if (error) {
         setNote((n) => ({ ...n, [row.device_id]: 'Gagal menyimpan. Coba lagi.' }))
         return
       }
-      setRows((prev) => prev.map((r) => (r.device_id === row.device_id ? { ...r, mode } : r)))
+      setRows((prev) => prev.map((r) => (r.device_id === row.device_id ? { ...r, mode, walkin_ahead } : r)))
+      setMenyalakan(null)
     } finally {
       setLoading(null)
     }
@@ -159,7 +171,7 @@ export default function QueuePanel({
                 </div>
 
                 <button
-                  onClick={() => ubahMode(row, hidup ? 'off' : 'on')}
+                  onClick={() => (hidup ? ubahMode(row, 'off') : setMenyalakan(menyalakan === d.id ? null : d.id))}
                   disabled={loading === d.id}
                   style={{
                     border: hidup ? `1px solid ${C.line}` : 'none',
@@ -175,6 +187,67 @@ export default function QueuePanel({
                 </button>
               </div>
 
+              {/*
+                Ditanyakan SEBELUM antrean menyala, bukan sesudah. Begitu QR
+                mulai dipindai, pemegang nomor pertama langsung membaca
+                estimasinya; kalau barisan yang sudah berdiri belum terhitung,
+                angka pertama yang dia lihat sudah salah dan tidak ada cara
+                menariknya kembali.
+              */}
+              {!hidup && menyalakan === d.id && (
+                <div style={{
+                  marginTop: 14, padding: 16, borderRadius: 14,
+                  background: 'rgba(212,43,34,0.04)', border: `1px solid ${C.line}`,
+                }}>
+                  <label htmlFor={`walkin-${d.id}`} style={{ fontSize: 13, fontWeight: 600, color: C.text, display: 'block' }}>
+                    Berapa orang sudah antre sekarang?
+                  </label>
+                  <p style={{ fontSize: 12, color: C.faint, marginTop: 4, lineHeight: 1.55, maxWidth: '52ch' }}>
+                    Hitung yang sedang berfoto sekalian. Mereka belum punya nomor,
+                    jadi kios tetap menampilkan tombol mulai sampai barisan ini habis —
+                    dan estimasi tunggu pemegang nomor dihitung dari sini.
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                    <input
+                      id={`walkin-${d.id}`} type="number" min={0} max={30} inputMode="numeric"
+                      value={jumlahAwal[d.id] ?? '0'}
+                      onChange={(e) => setJumlahAwal((j) => ({ ...j, [d.id]: e.target.value }))}
+                      style={{
+                        width: 84, padding: '11px 12px', borderRadius: 12, fontFamily: 'inherit',
+                        fontSize: 15, border: `1px solid ${C.line}`, background: '#fff', color: C.text,
+                      }} />
+                    <button
+                      onClick={() => {
+                        const n = parseInt(jumlahAwal[d.id] ?? '0', 10)
+                        ubahMode(row, 'on', Number.isFinite(n) ? Math.min(30, Math.max(0, n)) : 0)
+                      }}
+                      disabled={loading === d.id}
+                      style={{
+                        border: 'none', background: C.red, color: '#fff', fontFamily: 'inherit',
+                        fontSize: 14, fontWeight: 700, padding: '12px 20px', borderRadius: 12,
+                        cursor: 'pointer', opacity: loading === d.id ? 0.6 : 1,
+                      }}>
+                      Nyalakan
+                    </button>
+                    <button onClick={() => setMenyalakan(null)}
+                      style={{
+                        border: `1px solid ${C.line}`, background: '#fff', color: C.muted,
+                        fontFamily: 'inherit', fontSize: 14, fontWeight: 600,
+                        padding: '12px 16px', borderRadius: 12, cursor: 'pointer',
+                      }}>
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {hidup && row.walkin_ahead > 0 && (
+                <p style={{ fontSize: 12.5, color: C.muted, marginTop: 12, lineHeight: 1.55 }}>
+                  {row.walkin_ahead} orang antre tanpa nomor. Pemegang nomor baru dipanggil
+                  setelah barisan itu habis; operator bisa mengoreksi jumlahnya dari panelnya.
+                </p>
+              )}
+
               {note[d.id] && (
                 <p style={{ fontSize: 12.5, color: C.muted, marginTop: 12, lineHeight: 1.55 }}>
                   {note[d.id]}
@@ -185,7 +258,6 @@ export default function QueuePanel({
                 {[
                   { label: 'QR standee', nilai: urlAntri, kunci: `${d.id}-a` },
                   { label: 'Panel operator', nilai: urlOperator, kunci: `${d.id}-o` },
-                  { label: 'PIN operator', nilai: row.operator_pin ?? 'belum diatur', kunci: `${d.id}-p` },
                 ].map((baris) => (
                   <div key={baris.kunci} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 12, color: C.faint, minWidth: 104 }}>{baris.label}</span>
@@ -207,6 +279,21 @@ export default function QueuePanel({
                     </button>
                   </div>
                 ))}
+
+                {/*
+                  Panel operator tidak lagi ber-PIN: dibuka langsung dari sini.
+                  Siapa pun yang tahu URL-nya bisa masuk — diterima karena
+                  cakupannya hanya memanggil dan melewati antrean satu booth.
+                */}
+                <a href={urlOperator} target="_blank" rel="noopener noreferrer"
+                  style={{
+                    marginTop: 4, border: `1px solid ${C.line}`, background: '#fff', color: C.text,
+                    fontFamily: 'inherit', fontSize: 13.5, fontWeight: 700, padding: '12px 16px',
+                    borderRadius: 12, textDecoration: 'none', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}>
+                  <ExternalLink size={15} strokeWidth={1.9} /> Buka panel operator
+                </a>
               </div>
             </div>
           )

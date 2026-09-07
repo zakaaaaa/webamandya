@@ -182,15 +182,31 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
     statusSebelum.current = tiket.status
   }, [tiket])
 
+  // Nama dan nomor HP WAJIB, dan divalidasi di sini supaya orang tahu
+  // sebelum menekan tombol, bukan setelah menunggu jawaban server.
+  //
+  // Nomor bukan sekadar pelengkap: notifikasi push gagal diam-diam terlalu
+  // sering (izin ditolak, iPhone tanpa Add to Home Screen, HP mati), dan
+  // satu-satunya jaring pengaman yang tersisa adalah operator menghubungi
+  // orangnya lewat WhatsApp saat gilirannya tiba.
+  const digitHp = telepon.replace(/\D/g, '')
+  const namaSah = nama.trim().length >= 2
+  const hpSah = digitHp.length >= 10 && digitHp.length <= 15
+  const bolehAmbil = namaSah && hpSah
+
   async function ambilNomor() {
+    if (!bolehAmbil) {
+      setGalat(!namaSah ? 'Isi nama dulu ya.' : 'Nomor HP belum benar. Contoh: 0812xxxxxxx.')
+      return
+    }
     setSibuk(true); setGalat(null)
     try {
       const r = await fetch(`${API}/api/queue/${slug}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          display_name: nama.trim() || null,
-          phone: telepon.trim() || null,
+          display_name: nama.trim(),
+          phone: telepon.trim(),
           fingerprint: fingerprint(),
         }),
       })
@@ -481,17 +497,17 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
               <div style={{ display: 'grid', gap: 14 }}>
                 <div style={{ display: 'grid', gap: 7 }}>
                   <label htmlFor="q-nama" style={{ fontSize: 13, fontWeight: 600, color: C.teks2 }}>Nama</label>
-                  <input id="q-nama" className="q-field" value={nama} maxLength={40}
-                    onChange={(e) => setNama(e.target.value)} placeholder="Boleh dikosongkan" />
+                  <input id="q-nama" className="q-field" value={nama} maxLength={40} required
+                    onChange={(e) => setNama(e.target.value)} placeholder="Nama kamu" />
                 </div>
 
                 <div style={{ display: 'grid', gap: 7 }}>
                   <label htmlFor="q-hp" style={{ fontSize: 13, fontWeight: 600, color: C.teks2 }}>Nomor HP</label>
-                  <input id="q-hp" className="q-field" value={telepon} inputMode="tel" maxLength={20}
-                    onChange={(e) => setTelepon(e.target.value)} placeholder="Boleh dikosongkan" />
+                  <input id="q-hp" className="q-field" value={telepon} inputMode="tel" maxLength={20} required
+                    onChange={(e) => setTelepon(e.target.value)} placeholder="08xxxxxxxxxx" />
                   <p style={{ fontSize: 12, color: C.teks3, lineHeight: 1.5, display: 'flex', gap: 7, alignItems: 'flex-start' }}>
                     <Phone size={13} strokeWidth={1.8} style={{ flexShrink: 0, marginTop: 2 }} />
-                    Hanya dipakai petugas kalau notifikasi tidak sampai.
+                    Petugas menghubungimu lewat WhatsApp saat giliranmu tiba.
                   </p>
                 </div>
 
@@ -499,7 +515,7 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
                   <p style={{ fontSize: 13, color: C.aksenTua, lineHeight: 1.5, fontWeight: 600 }}>{galat}</p>
                 )}
 
-                <button className="q-btn" onClick={ambilNomor} disabled={sibuk}
+                <button className="q-btn" onClick={ambilNomor} disabled={sibuk || !bolehAmbil}
                   style={{ background: C.aksen, color: '#fff' }}>
                   {sibuk ? 'Mengambil nomor' : 'Ambil nomor antrean'}
                 </button>

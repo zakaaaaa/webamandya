@@ -1,14 +1,15 @@
 const express = require('express');
 const router  = express.Router();
-const crypto  = require('crypto');
 const { supabase, validateDevice } = require('../middleware/validateDevice');
 const { kirimPush, pushAktif, kunciPublik } = require('../utils/webpush');
+const { resolveSettings } = require('../utils/settings');
+const { hitungPosisi, sisaSesiBerjalan, etaDetik, hitungEta } = require('../utils/queue-eta');
 
 // Antrean pelanggan photobooth.
 //
 // Tiga pemakai, satu sumber kebenaran di server:
 //   - halaman pengunjung  : publik, dibuka dari QR di standee (slug pendek)
-//   - panel operator      : publik + PIN, dibuka di HP operator
+//   - panel operator      : publik tanpa kredensial, dibuka dari dashboard
 //   - aplikasi kiosk      : validateDevice (hwid), hanya membaca & mengklaim
 //
 // Kiosk sengaja dibuat sebagai PEMBACA, bukan pemilik antrean. Kalau aplikasi
@@ -17,11 +18,6 @@ const { kirimPush, pushAktif, kunciPublik } = require('../utils/webpush');
 
 const AKTIF = ['waiting', 'called', 'serving'];
 
-// Estimasi tunggu dijaga di rentang masuk akal: satu sesi photobooth tidak
-// pernah 30 detik dan tidak pernah setengah jam. Tanpa batas ini, satu sesi
-// yang lupa ditutup operator akan merusak estimasi semua orang di belakangnya.
-const ESTIMASI_MIN = 120;
-const ESTIMASI_MAX = 1800;
 
 // ============================================================
 // Bantu-bantu
@@ -31,13 +27,6 @@ const ESTIMASI_MAX = 1800;
 // UTC akan me-reset nomor antrean persis saat booth mulai ramai.
 function tanggalJakarta() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-}
-
-function samaAman(a, b) {
-  const x = Buffer.from(String(a ?? ''));
-  const y = Buffer.from(String(b ?? ''));
-  if (x.length !== y.length || x.length === 0) return false;
-  return crypto.timingSafeEqual(x, y);
 }
 
 async function ambilState(slug) {
@@ -52,7 +41,7 @@ async function ambilState(slug) {
 async function ambilStateByDevice(deviceId) {
   const { data } = await supabase
     .from('device_queue_state')
-    .select('*')
+    .select('*, devices(id, hwid, device_name, client_id, is_active)')
     .eq('device_id', deviceId)
     .maybeSingle();
   return data || null;
@@ -95,55 +84,25 @@ async function ambilPapan(deviceId) {
   return data || [];
 }
 
-// Rata-rata durasi layanan nyata di booth ini. Dihitung dari tiket yang sudah
-// selesai, bukan angka tetap — durasi sesi berbeda jauh antar lokasi dan antar
-// jenis frame, dan estimasi yang meleset jauh lebih merusak kepercayaan
-// daripada tidak ada estimasi sama sekali.
-async function estimasiDetik(deviceId, state) {
-  const cadangan = state?.fallback_session_seconds || 480;
-
-  const { data } = await supabase
-    .from('queue_tickets')
-    .select('served_at, closed_at')
-    .eq('device_id', deviceId)
-    .eq('status', 'done')
-    .not('served_at', 'is', null)
-    .not('closed_at', 'is', null)
-    .order('closed_at', { ascending: false })
-    .limit(5);
-
-  if (!data || data.length === 0) return cadangan;
-
-  const durasi = data
-    .map((t) => (new Date(t.closed_at) - new Date(t.served_at)) / 1000)
-    .filter((d) => d >= ESTIMASI_MIN && d <= ESTIMASI_MAX);
-
-  if (durasi.length === 0) return cadangan;
-
-  const rata = durasi.reduce((a, b) => a + b, 0) / durasi.length;
-  return Math.round(Math.min(ESTIMASI_MAX, Math.max(ESTIMASI_MIN, rata)));
-}
-
-// Posisi 1 = "kamu berikutnya". Tiket yang sedang dipanggil atau sedang
-// difoto tetap dihitung berada di depan.
-function hitungPosisi(papan, ticketId) {
-  const didepan = papan.filter((t) => t.status === 'called' || t.status === 'serving').length;
-  const menunggu = papan.filter((t) => t.status === 'waiting');
-  const idx = menunggu.findIndex((t) => t.id === ticketId);
-  if (idx < 0) return null;
-  return didepan + idx + 1;
-}
-
-function sisaDetikSesiBerjalan(papan, rata) {
-  const jalan = papan.find((t) => t.status === 'serving');
-  if (!jalan || !jalan.served_at) return 0;
-  const lewat = (Date.now() - new Date(jalan.served_at)) / 1000;
-  return Math.max(60, Math.round(rata - lewat));
-}
-
-function hitungEta(papan, posisi, rata) {
-  if (posisi == null) return null;
-  return Math.max(0, Math.round((posisi - 1) * rata + sisaDetikSesiBerjalan(papan, rata)));
+// Durasi satu sesi menurut setelan yang berlaku di booth ini
+// (DEFAULT <- client_settings <- device_settings).
+//
+// Sengaja BUKAN rata-rata sesi yang sudah lewat. Angka ini harus sama persis
+// dengan yang dilihat pemilik di halaman Settings: estimasi yang meleset
+// masih bisa diperbaiki kalau sumbernya satu angka yang bisa diubah, tapi
+// tidak bisa diapa-apakan kalau sumbernya rata-rata yang bergerak sendiri.
+async function durasiSesiDetik(state) {
+  const clientId = state?.devices?.client_id;
+  if (!clientId) return 300;
+  try {
+    const setelan = await resolveSettings(clientId, state.device_id);
+    const menit = Number(setelan.session_duration_minutes);
+    if (!Number.isFinite(menit) || menit <= 0) return 300;
+    return Math.round(menit * 60);
+  } catch (e) {
+    console.error('[Queue] durasiSesiDetik error:', e);
+    return 300;
+  }
 }
 
 // Langganan push yang sudah mati harus dikosongkan, kalau tidak endpoint itu
@@ -161,10 +120,11 @@ async function pushKeTiket(tiket, payload) {
 // Inilah sinyal yang sebenarnya membuat orang berani menjauh dari tenant:
 // tanpa ini, pemberitahuan baru datang saat gilirannya tiba dan booth
 // menganggur menunggu orangnya berjalan kembali.
-async function sinkronSiapSiap(state, papan, rata) {
+async function sinkronSiapSiap(state, papan, durasi) {
   const ambang = state.notify_lead ?? 2;
   const menunggu = papan.filter((t) => t.status === 'waiting');
-  const didepan  = papan.filter((t) => t.status === 'called' || t.status === 'serving').length;
+  const didepan  = Math.max(0, state.walkin_ahead || 0)
+    + papan.filter((t) => t.status === 'called' || t.status === 'serving').length;
 
   for (let i = 0; i < menunggu.length; i++) {
     const tiket = menunggu[i];
@@ -172,7 +132,7 @@ async function sinkronSiapSiap(state, papan, rata) {
     if (posisi > ambang) break;
     if (tiket.notified_soon_at || !tiket.push_subscription) continue;
 
-    const menit = Math.max(1, Math.round(hitungEta(papan, posisi, rata) / 60));
+    const menit = Math.max(1, Math.round(hitungEta(state, papan, tiket.id, durasi) / 60));
     await pushKeTiket(tiket, {
       judul: 'Sebentar lagi giliranmu',
       isi: `Tinggal ${posisi - 1} orang di depanmu (±${menit} menit). Mulai jalan balik ke booth ya.`,
@@ -195,6 +155,14 @@ async function panggilBerikutnya(state) {
   // urutan antreannya jadi perdebatan di depan booth.
   if (papan.some((t) => t.status === 'called' || t.status === 'serving')) {
     return { dipanggil: null, alasan: 'MASIH_ADA_YANG_AKTIF' };
+  }
+
+  // Orang yang sudah berdiri antre sebelum mode antrean dinyalakan tidak
+  // punya tiket, tapi gilirannya jelas lebih dulu. Selama barisan itu belum
+  // habis, pemegang tiket tidak boleh dipanggil — memanggil mereka lebih dulu
+  // adalah persis perselisihan yang seluruh fitur antrean ini hindari.
+  if ((state.walkin_ahead || 0) > 0) {
+    return { dipanggil: null, alasan: 'BARISAN_FISIK_BELUM_HABIS' };
   }
 
   const berikut = papan.find((t) => t.status === 'waiting');
@@ -222,8 +190,8 @@ async function panggilBerikutnya(state) {
     kode: berikut.claim_code,
   });
 
-  const rata = await estimasiDetik(state.device_id, state);
-  await sinkronSiapSiap(state, await ambilPapan(state.device_id), rata);
+  const durasi = await durasiSesiDetik(state);
+  await sinkronSiapSiap(state, await ambilPapan(state.device_id), durasi);
 
   return { dipanggil: berikut, alasan: null };
 }
@@ -231,6 +199,19 @@ async function panggilBerikutnya(state) {
 // PostgREST mengembalikan fungsi bertipe komposit sebagai objek tunggal, tapi
 // bentuknya bisa berubah jadi array satu elemen tergantung versi. Normalkan di
 // satu tempat supaya pemanggilnya tidak perlu menebak.
+// Nomor disimpan dalam bentuk internasional tanpa tanda baca supaya panel
+// operator bisa langsung membuka wa.me tanpa menebak format tiap kali.
+// '08...' adalah bentuk yang hampir selalu diketik orang di Indonesia, jadi
+// itu yang diterjemahkan; '+62' dan '62' diterima apa adanya.
+function normalHp(mentah) {
+  const digit = String(mentah || '').replace(/\D/g, '');
+  if (!digit) return null;
+  if (digit.startsWith('62')) return digit;
+  if (digit.startsWith('0'))  return '62' + digit.slice(1);
+  if (digit.startsWith('8'))  return '62' + digit;
+  return digit;
+}
+
 function satuBaris(data) {
   return Array.isArray(data) ? data[0] : data;
 }
@@ -272,6 +253,12 @@ router.post('/kiosk/state', validateDevice, async (req, res) => {
       dilayani: dilayani ? ringkasTiket(dilayani) : null,
       menunggu: papan.filter((t) => t.status === 'waiting').length,
       berikutnya: papan.filter((t) => t.status === 'waiting').slice(0, 3).map(ringkasTiket),
+      // Barisan fisik yang belum bertiket. Selama masih ada, kiosk WAJIB
+      // tetap menampilkan tombol MULAI biasa: orang-orang ini sudah berdiri
+      // di depan booth sebelum mode antrean dinyalakan dan tidak punya kode
+      // apa pun untuk diketik.
+      walkin_ahead: state.walkin_ahead || 0,
+      boleh_mulai: (state.walkin_ahead || 0) > 0,
     });
   } catch (e) {
     console.error('[Queue] kiosk/state error:', e);
@@ -403,11 +390,31 @@ router.post('/kiosk/done', validateDevice, async (req, res) => {
       await supabase.from('queue_tickets').update(patch).eq('id', tiket.id);
     }
 
+    // Sesi yang selesai TANPA tiket berarti yang baru saja berfoto adalah
+    // orang dari barisan fisik. Inilah satu-satunya titik yang tahu barisan
+    // itu maju satu langkah — mereka tidak punya baris tiket yang statusnya
+    // bisa berubah. Laporan sisa waktu ikut dikosongkan supaya estimasi tidak
+    // menahan angka sesi yang sudah berakhir.
+    const patchState = {
+      sesi_sisa_detik: null,
+      sesi_sisa_at: null,
+      updated_at: new Date().toISOString(),
+    };
+    if (!tiket && (state.walkin_ahead || 0) > 0) {
+      state.walkin_ahead = state.walkin_ahead - 1;
+      patchState.walkin_ahead = state.walkin_ahead;
+    }
+    await supabase
+      .from('device_queue_state')
+      .update(patchState)
+      .eq('device_id', state.device_id);
+
     const { dipanggil } = await panggilBerikutnya(state);
     return res.json({
       success: true,
       ditutup: tiket?.id || null,
       dipanggil: dipanggil ? ringkasTiket(dipanggil) : null,
+      walkin_ahead: state.walkin_ahead || 0,
     });
   } catch (e) {
     console.error('[Queue] kiosk/done error:', e);
@@ -415,31 +422,58 @@ router.post('/kiosk/done', validateDevice, async (req, res) => {
   }
 });
 
+// POST /api/queue/kiosk/heartbeat — { hwid, sisa_detik }
+//
+// Satu-satunya sumber sisa waktu sesi yang sedang berjalan. Server sengaja
+// tidak menghitungnya sendiri dari waktu mulai: timernya ada di aplikasi
+// kiosk, bisa dijeda, dan sesi nyata sering berjalan lebih lama daripada
+// durasi setelan. Menebaknya berarti setiap orang di antrean menerima
+// estimasi yang meleset dengan arah yang sama.
+router.post('/kiosk/heartbeat', validateDevice, async (req, res) => {
+  const sisa = parseInt(req.body.sisa_detik, 10);
+  if (!Number.isInteger(sisa) || sisa < 0 || sisa > 7200) {
+    return res.status(400).json({ success: false, message: 'sisa_detik tidak valid.' });
+  }
+
+  try {
+    await supabase
+      .from('device_queue_state')
+      .update({ sesi_sisa_detik: sisa, sesi_sisa_at: new Date().toISOString() })
+      .eq('device_id', req.device.id);
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[Queue] kiosk/heartbeat error:', e);
+    return res.status(500).json({ success: false, message: 'Server error.' });
+  }
+});
+
 // ============================================================
-// OPERATOR — PIN dikirim di header X-Queue-Pin
+// OPERATOR — terbuka, tanpa kredensial
+//
+// PIN dihapus atas keputusan pemilik: panel ini hanya memanggil dan melewati
+// antrean satu booth, dan satu layar PIN di HP operator saat antrean panjang
+// lebih sering menghambat daripada melindungi. Konsekuensinya diterima —
+// siapa pun yang tahu URL-nya bisa membuka panel ini.
 // ============================================================
 
-async function pinOperator(req, res, next) {
+async function bukaState(req, res, next) {
   const state = await ambilState(req.params.slug);
   if (!state) return res.status(404).json({ success: false, message: 'Booth tidak ditemukan.' });
-
-  if (!state.operator_pin || !samaAman(req.get('x-queue-pin'), state.operator_pin)) {
-    return res.status(401).json({ success: false, message: 'PIN operator salah.' });
-  }
   req.state = state;
   next();
 }
 
-router.post('/:slug/op/verify', pinOperator, (req, res) => {
+router.post('/:slug/op/verify', bukaState, (req, res) => {
   res.json({ success: true, booth: req.state.devices?.device_name || null, mode: req.state.mode });
 });
 
-router.get('/:slug/op/board', pinOperator, async (req, res) => {
+router.get('/:slug/op/board', bukaState, async (req, res) => {
   try {
     await tutupTiketBasi(req.state.device_id);
     const papan = await ambilPapan(req.state.device_id);
-    const rata  = await estimasiDetik(req.state.device_id, req.state);
-    const didepan = papan.filter((t) => t.status === 'called' || t.status === 'serving').length;
+    const durasi = await durasiSesiDetik(req.state);
+    const didepan = Math.max(0, req.state.walkin_ahead || 0)
+      + papan.filter((t) => t.status === 'called' || t.status === 'serving').length;
 
     let i = 0;
     const daftar = papan.map((t) => {
@@ -459,7 +493,9 @@ router.get('/:slug/op/board', pinOperator, async (req, res) => {
       mode: req.state.mode,
       notify_lead: req.state.notify_lead,
       max_queue_length: req.state.max_queue_length,
-      estimasi_per_sesi: rata,
+      estimasi_per_sesi: durasi,
+      walkin_ahead: req.state.walkin_ahead || 0,
+      sisa_sesi_berjalan: sisaSesiBerjalan(req.state),
       push_aktif: pushAktif(),
       tiket: daftar,
     });
@@ -475,7 +511,7 @@ router.get('/:slug/op/board', pinOperator, async (req, res) => {
 // mematikannya — orang-orang itu akan terlantar. Karena itu 'off' saat antrean
 // belum kosong otomatis diturunkan menjadi 'closing': berhenti menerima
 // pendatang baru, sisa tiket tetap dilayani, lalu mati sendiri saat bersih.
-router.post('/:slug/op/mode', pinOperator, async (req, res) => {
+router.post('/:slug/op/mode', bukaState, async (req, res) => {
   const diminta = String(req.body.mode || '');
   if (!['on', 'closing', 'off'].includes(diminta)) {
     return res.status(400).json({ success: false, message: 'Mode tidak dikenal.' });
@@ -488,35 +524,72 @@ router.post('/:slug/op/mode', pinOperator, async (req, res) => {
       if (papan.length > 0) mode = 'closing';
     }
 
+    const patch = { mode, updated_at: new Date().toISOString() };
+
+    // Saat antrean dinyalakan, operator memasukkan berapa orang yang sudah
+    // berdiri antre tanpa scan QR — TERMASUK yang sedang berfoto. Orang-orang
+    // itu tidak punya baris di queue_tickets, jadi ini satu-satunya kesempatan
+    // sistem mengetahui mereka ada. Tanpa angka ini pemegang tiket pertama
+    // melihat estimasi yang jauh terlalu pendek, datang ke booth, lalu
+    // menemukan masih ada orang di depannya.
+    if (diminta === 'on') {
+      const walkin = parseInt(req.body.walkin_ahead, 10);
+      patch.walkin_ahead = Number.isInteger(walkin) && walkin >= 0 && walkin <= 30 ? walkin : 0;
+    }
+
+    // Antrean benar-benar mati: barisan fisik ikut dilupakan, kalau tidak
+    // hitungannya akan menghantui sesi berikutnya berhari-hari kemudian.
+    if (mode === 'off') patch.walkin_ahead = 0;
+
     await supabase
       .from('device_queue_state')
-      .update({ mode, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq('device_id', req.state.device_id);
 
-    res.json({ success: true, mode, diminta });
+    // Menyalakan antrean saat booth menganggur harus langsung memanggil orang
+    // pertama. Tanpa ini tidak ada pemicu apa pun sampai ada sesi selesai —
+    // dan kalau tidak ada yang dipanggil, tidak akan pernah ada sesi selesai.
+    if (mode !== 'off') {
+      await panggilBerikutnya({ ...req.state, ...patch });
+    }
+
+    res.json({ success: true, mode, diminta, walkin_ahead: patch.walkin_ahead });
   } catch (e) {
     console.error('[Queue] op/mode error:', e);
     res.status(500).json({ success: false, message: 'Server error.' });
   }
 });
 
-router.post('/:slug/op/settings', pinOperator, async (req, res) => {
+router.post('/:slug/op/settings', bukaState, async (req, res) => {
   const patch = { updated_at: new Date().toISOString() };
   const lead = parseInt(req.body.notify_lead, 10);
   const maks = parseInt(req.body.max_queue_length, 10);
 
+  const walkin = parseInt(req.body.walkin_ahead, 10);
+
   if (Number.isInteger(lead) && lead >= 1 && lead <= 10) patch.notify_lead = lead;
   if (Number.isInteger(maks) && maks >= 1 && maks <= 99) patch.max_queue_length = maks;
+  // Salah hitung barisan fisik itu wajar saat booth ramai; harus bisa
+  // dikoreksi tanpa mematikan lalu menyalakan ulang antrean.
+  if (Number.isInteger(walkin) && walkin >= 0 && walkin <= 30) patch.walkin_ahead = walkin;
 
   if (Object.keys(patch).length === 1) {
     return res.status(400).json({ success: false, message: 'Tidak ada setelan yang berubah.' });
   }
 
   await supabase.from('device_queue_state').update(patch).eq('device_id', req.state.device_id);
+
+  // Operator baru saja mengoreksi barisan fisik menjadi nol saat booth
+  // menganggur: tidak ada sesi yang akan selesai untuk memicu panggilan, jadi
+  // pemegang nomor pertama harus dipanggil dari sini.
+  if (patch.walkin_ahead === 0) {
+    await panggilBerikutnya({ ...req.state, walkin_ahead: 0 });
+  }
+
   res.json({ success: true, ...patch });
 });
 
-router.post('/:slug/op/call-next', pinOperator, async (req, res) => {
+router.post('/:slug/op/call-next', bukaState, async (req, res) => {
   try {
     const { dipanggil, alasan } = await panggilBerikutnya(req.state);
     res.json({ success: true, dipanggil: dipanggil ? ringkasTiket(dipanggil) : null, alasan });
@@ -529,12 +602,12 @@ router.post('/:slug/op/call-next', pinOperator, async (req, res) => {
 // Tiket manual untuk orang yang sudah terlanjur berdiri antre saat mode
 // antrean baru dinyalakan — urutan fisik mereka tidak boleh hilang, dan
 // menyuruh mereka rebutan scan hanya akan memicu perdebatan.
-router.post('/:slug/op/issue', pinOperator, async (req, res) => {
+router.post('/:slug/op/issue', bukaState, async (req, res) => {
   try {
     const { data, error } = await supabase.rpc('queue_take_ticket', {
       p_slug: req.state.queue_slug,
-      p_name: req.body.display_name || null,
-      p_phone: req.body.phone || null,
+      p_name: String(req.body.display_name || '').trim() || null,
+      p_phone: normalHp(req.body.phone),
       p_fingerprint: null,
       p_source: 'operator',
     });
@@ -549,7 +622,7 @@ router.post('/:slug/op/issue', pinOperator, async (req, res) => {
 // Melewati orang yang tidak muncul. Tidak ada auto-skip berbasis timer:
 // operator selalu ada di booth dan jauh lebih akurat menilai ini daripada
 // hitungan mundur — dia bisa melihat orangnya sedang berjalan mendekat.
-router.post('/:slug/op/t/:ticketId/skip', pinOperator, async (req, res) => {
+router.post('/:slug/op/t/:ticketId/skip', bukaState, async (req, res) => {
   try {
     const { data: tiket } = await supabase
       .from('queue_tickets')
@@ -614,7 +687,7 @@ router.get('/:slug', async (req, res) => {
 
     await tutupTiketBasi(state.device_id);
     const papan = await ambilPapan(state.device_id);
-    const rata  = await estimasiDetik(state.device_id, state);
+    const durasi = await durasiSesiDetik(state);
     const menunggu = papan.filter((t) => t.status === 'waiting').length;
 
     res.json({
@@ -626,8 +699,10 @@ router.get('/:slug', async (req, res) => {
       mode: state.mode,
       menerima_tiket: state.mode === 'on' && menunggu < state.max_queue_length,
       menunggu,
-      estimasi_per_sesi: rata,
-      estimasi_tunggu: Math.round(menunggu * rata + sisaDetikSesiBerjalan(papan, rata)),
+      estimasi_per_sesi: durasi,
+      // Estimasi untuk orang yang BELUM bertiket: seolah dia mengambil nomor
+      // sekarang juga, jadi semua yang menunggu dihitung ada di depannya.
+      estimasi_tunggu: etaDetik(state, papan, menunggu, durasi),
       push_aktif: pushAktif(),
       vapid_public_key: kunciPublik(),
     });
@@ -663,11 +738,25 @@ router.post('/:slug/join', async (req, res) => {
     return res.status(429).json({ success: false, message: 'Terlalu sering mengambil nomor. Coba sebentar lagi.', code: 'RATE_LIMITED' });
   }
 
+  // Nama dan nomor HP WAJIB. Notifikasi push gagal diam-diam terlalu sering
+  // (izin ditolak, iPhone tanpa Add to Home Screen, HP mati), dan satu-satunya
+  // jaring pengaman yang tersisa adalah operator menghubungi orangnya lewat
+  // WhatsApp. Tanpa nomor, orang yang menjauh dari tenant hilang begitu saja.
+  const nama    = String(req.body.display_name || '').trim();
+  const telepon = normalHp(req.body.phone);
+
+  if (nama.length < 2) {
+    return res.status(400).json({ success: false, message: 'Nama wajib diisi.', code: 'NAMA_WAJIB' });
+  }
+  if (!telepon || telepon.length < 11 || telepon.length > 15) {
+    return res.status(400).json({ success: false, message: 'Nomor HP wajib diisi dengan benar, contoh 0812xxxxxxx.', code: 'HP_WAJIB' });
+  }
+
   try {
     const { data, error } = await supabase.rpc('queue_take_ticket', {
       p_slug: String(req.params.slug || '').toLowerCase(),
-      p_name: req.body.display_name || null,
-      p_phone: req.body.phone || null,
+      p_name: nama,
+      p_phone: telepon,
       p_fingerprint: req.body.fingerprint || null,
       p_source: 'qr',
     });
@@ -688,9 +777,17 @@ router.post('/:slug/join', async (req, res) => {
 
     const tiket = satuBaris(data);
     const state = await ambilState(req.params.slug);
+
+    // Booth yang sedang menganggur saat tiket ini masuk tidak akan pernah
+    // memicu kiosk/done, jadi tanpa panggilan di sini orang pertama hari itu
+    // menunggu selamanya tanpa pernah melihat kodenya. panggilBerikutnya
+    // menolak sendiri kalau booth sibuk atau barisan fisik belum habis, jadi
+    // aman dipanggil tanpa syarat tambahan.
+    await panggilBerikutnya(state);
+
     const papan = await ambilPapan(state.device_id);
-    const rata  = await estimasiDetik(state.device_id, state);
-    const posisi = hitungPosisi(papan, tiket.id);
+    const durasi = await durasiSesiDetik(state);
+    const posisi = hitungPosisi(papan, tiket.id, state.walkin_ahead);
 
     res.status(201).json({
       success: true,
@@ -698,7 +795,7 @@ router.post('/:slug/join', async (req, res) => {
       nomor: tiket.ticket_no,
       kode: tiket.claim_code,
       posisi,
-      estimasi_tunggu: hitungEta(papan, posisi, rata),
+      estimasi_tunggu: hitungEta(state, papan, tiket.id, durasi),
     });
   } catch (e) {
     console.error('[Queue] join error:', e);
@@ -727,8 +824,8 @@ router.get('/:slug/t/:ticketId', async (req, res) => {
     if (!tiket) return res.status(404).json({ success: false, message: 'Tiket tidak ditemukan.' });
 
     const papan = await ambilPapan(state.device_id);
-    const rata  = await estimasiDetik(state.device_id, state);
-    const posisi = hitungPosisi(papan, tiket.id);
+    const durasi = await durasiSesiDetik(state);
+    const posisi = hitungPosisi(papan, tiket.id, state.walkin_ahead);
 
     res.json({
       success: true,
@@ -738,7 +835,7 @@ router.get('/:slug/t/:ticketId', async (req, res) => {
       nama: tiket.display_name,
       status: tiket.status,
       posisi,
-      estimasi_tunggu: hitungEta(papan, posisi, rata),
+      estimasi_tunggu: hitungEta(state, papan, tiket.id, durasi),
       frame_id: tiket.selected_frame_id,
       // Halaman memakai ini untuk berkata jujur soal notifikasi. Skenario
       // terburuk fitur ini bukan push yang gagal, tapi orang yang menjauh
