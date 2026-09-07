@@ -69,21 +69,14 @@ const STEP_TAU_MS   = 11000  // kecepatan merayap dalam satu langkah
 const SLOW_AFTER_MS = 90000  // lewat ini, akui bahwa prosesnya lebih lama
 const CREEP_CEILING = 95     // pagar: tanpa bukti file siap, berhenti di sini
 
-// ── Kalibrasi indikator CETAK ────────────────────────────────────────────
-// Sumbernya antrian spooler Windows di mesin photobooth, BUKAN sensor di
-// dalam printer. Yang benar-benar diketahui cuma kejadian per LEMBAR: job
-// masih ada di antrian, atau sudah lepas darinya. `PagesPrinted` tidak
-// pernah bergerak untuk job satu halaman (diukur 2026-09-06 di EPSON L3210),
-// jadi persentase di bawah ini digerakkan WAKTU terhadap perkiraan yang
-// dikirim mesin, dengan jumlah lembar yang sudah lepas sebagai lantainya —
-// pola yang sama dengan cincin media di atas.
-//
-// Perkiraan durasinya sendiri (print_eta_seconds) datang dari app, karena
-// hanya app yang tahu ukuran kertas frame yang dipilih dan berapa lembar
-// yang dicetak. 4R jauh lebih lama daripada A4 kertas biasa.
+// ── Indikator CETAK ──────────────────────────────────────────────────────
+// Sumbernya antrian spooler Windows di mesin photobooth, bukan sensor di
+// dalam printer: yang diketahui hanya job masih di antrian atau sudah lepas.
+// Persentase digerakkan WAKTU terhadap perkiraan yang dikirim app
+// (print_eta_seconds), dengan jumlah lembar yang sudah lepas sebagai lantai.
 const PRINT_CEILING = 96
-// Cetak 4R terukur 4,5 menit untuk SATU lembar, dan pelanggan bisa memesan
-// beberapa lembar. Batas polling media (~5 menit) terlalu pendek untuk itu.
+// Panjang: pelanggan bisa memesan beberapa lembar, dan batas polling media
+// (~5 menit) terlalu pendek untuk itu.
 const PRINT_POLL_MAX_ATTEMPTS = 300 // ~20 menit @ 4 detik
 
 // Layout sama persis Flutter
