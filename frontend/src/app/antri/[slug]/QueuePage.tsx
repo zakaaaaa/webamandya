@@ -288,7 +288,14 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
   const kabarAktif = kabar === 'aktif' || tiket?.dikabari
 
   return (
-    <div style={{ minHeight: '100dvh', background: C.ground, color: C.teks, fontFamily: "'Poppins',sans-serif" }}>
+    <div style={{
+      minHeight: '100dvh', background: C.ground, color: C.teks, fontFamily: "'Poppins',sans-serif",
+      // Kartu "giliranmu" bernapas dengan scale(1.015). Kartu itu selebar
+      // kolom, jadi 1,5% itu keluar beberapa piksel di kiri-kanan dan
+      // memunculkan geser-samping di HP — halaman jadi goyang tiap 2 detik
+      // persis saat orang paling butuh membaca kodenya.
+      overflowX: 'hidden',
+    }}>
       <style>{`
         .q-btn { border:none; font-family:inherit; font-weight:700; cursor:pointer;
                  width:100%; padding:17px 20px; font-size:16px;
@@ -314,7 +321,12 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
         }
       `}</style>
 
-      <div style={{ maxWidth: 440, margin: '0 auto', padding: '32px 20px 56px' }}>
+      <div style={{
+        maxWidth: 440, margin: '0 auto',
+        // env() supaya isi tidak tertutup home indicator iPhone maupun
+        // takik layar saat HP dimiringkan.
+        padding: '32px max(20px, env(safe-area-inset-right)) calc(56px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left))',
+      }}>
 
         <header style={{ marginBottom: 28 }}>
           <img src="/logo-pk.webp" alt="Pabrik Kenangan" width={196} height={110}
@@ -337,13 +349,18 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
             boxShadow: '0 14px 40px rgba(212,43,34,.24)',
           }}>
             <p style={{ fontSize: 13, fontWeight: 600, letterSpacing: '.08em', opacity: .92 }}>GILIRANMU SEKARANG</p>
-            <p style={{ fontSize: 68, fontWeight: 800, lineHeight: 1, margin: '8px 0 4px', letterSpacing: '-0.03em' }}>
+            <p style={{ fontSize: 'clamp(52px, 17vw, 68px)', fontWeight: 800, lineHeight: 1, margin: '8px 0 4px', letterSpacing: '-0.03em' }}>
               {tiket.nomor}
             </p>
             <p style={{ fontSize: 15, opacity: .92, marginBottom: 22 }}>Datang ke booth sekarang.</p>
             <div style={{ background: 'rgba(255,255,255,.16)', borderRadius: R_KENDALI, padding: '16px 18px' }}>
               <p style={{ fontSize: 12.5, opacity: .88, marginBottom: 4 }}>Tunjukkan kode ini di booth</p>
-              <p style={{ fontSize: 42, fontWeight: 800, letterSpacing: '.18em', lineHeight: 1.1 }}>{tiket.kode}</p>
+              <p style={{
+                fontSize: 'clamp(32px, 11vw, 42px)', fontWeight: 800, letterSpacing: '.18em', lineHeight: 1.1,
+                // Spasi huruf .18em membuat 4 angka jauh lebih lebar daripada
+                // dugaan; tanpa ini digit terakhir terpotong di layar sempit.
+                overflowWrap: 'anywhere',
+              }}>{tiket.kode}</p>
             </div>
           </section>
         )}
@@ -366,20 +383,23 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
               padding: '26px 24px 22px',
             }}>
               <p style={{ fontSize: 12.5, color: C.teks3, fontWeight: 600, letterSpacing: '.07em' }}>NOMOR ANTREANMU</p>
-              <p style={{ fontSize: 76, fontWeight: 800, color: C.aksen, lineHeight: 1, margin: '4px 0 20px', letterSpacing: '-0.04em' }}>
+              <p style={{ fontSize: 'clamp(58px, 19vw, 76px)', fontWeight: 800, color: C.aksen, lineHeight: 1, margin: '4px 0 20px', letterSpacing: '-0.04em' }}>
                 {tiket.nomor}
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, borderTop: `1px solid ${C.garisTipis}`, paddingTop: 18 }}>
-                <div>
-                  <p style={{ fontSize: 21, fontWeight: 700 }}>
+              <div style={{
+                display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'clamp(12px, 4vw, 20px)',
+                borderTop: `1px solid ${C.garisTipis}`, paddingTop: 18,
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 'clamp(18px, 5.5vw, 21px)', fontWeight: 700 }}>
                     {tiket.posisi === 1 ? 'Berikutnya' : `${(tiket.posisi ?? 1) - 1} orang`}
                   </p>
                   <p style={{ fontSize: 12, color: C.teks3, marginTop: 2 }}>
                     {tiket.posisi === 1 ? 'kamu paling depan' : 'di depanmu'}
                   </p>
                 </div>
-                <div>
-                  <p style={{ fontSize: 21, fontWeight: 700 }}>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ fontSize: 'clamp(18px, 5.5vw, 21px)', fontWeight: 700 }}>
                     {menitDari(tiket.estimasi_tunggu) ?? 'Belum'} {menitDari(tiket.estimasi_tunggu) ? 'menit' : 'terhitung'}
                   </p>
                   <p style={{ fontSize: 12, color: C.teks3, marginTop: 2 }}>perkiraan tunggu</p>

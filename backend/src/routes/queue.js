@@ -586,6 +586,21 @@ router.post('/:slug/op/settings', bukaState, async (req, res) => {
     await panggilBerikutnya({ ...req.state, walkin_ahead: 0 });
   }
 
+  // Kebalikannya: menaikkan hitungan berarti operator menyatakan ada orang
+  // yang gilirannya lebih dulu daripada pemegang nomor yang barusan
+  // dipanggil. Panggilan itu harus ditarik kembali — membiarkannya berarti
+  // dua orang berdiri di depan booth sama-sama merasa sedang dipanggil.
+  //
+  // Hanya yang berstatus 'called'. Yang sudah 'serving' sedang berfoto dan
+  // tidak boleh diusik apa pun alasannya.
+  if (patch.walkin_ahead > 0) {
+    await supabase
+      .from('queue_tickets')
+      .update({ status: 'waiting', called_at: null })
+      .eq('device_id', req.state.device_id)
+      .eq('status', 'called');
+  }
+
   res.json({ success: true, ...patch });
 });
 

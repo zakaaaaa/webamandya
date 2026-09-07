@@ -173,7 +173,10 @@ export default function OperatorPanel({ slug }: { slug: string }) {
   return (
     <div style={{ minHeight: '100dvh', background: C.ground, color: C.teks, fontFamily: "'Poppins',sans-serif" }}>
       {gaya}
-      <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 16px 48px' }}>
+      <div style={{
+        maxWidth: 520, margin: '0 auto',
+        padding: '24px max(16px, env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))',
+      }}>
 
         {/* Status mode: hanya dibaca. Diubah dari dasbor. */}
         <header style={{ paddingBottom: 18, borderBottom: `1px solid ${C.garisTipis}`, marginBottom: 18 }}>
@@ -206,10 +209,13 @@ export default function OperatorPanel({ slug }: { slug: string }) {
             background: walkin > 0 ? C.papan : 'transparent',
             border: `1px solid ${walkin > 0 ? C.garis : C.garisTipis}`,
             borderRadius: R_PERMUKAAN, padding: '14px 16px', marginBottom: 14,
-            display: 'flex', alignItems: 'center', gap: 12,
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
           }}>
             <Users size={18} strokeWidth={1.8} color={walkin > 0 ? C.aksen : C.teks3} style={{ flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
+            {/* minWidth 140: di bawah itu teksnya pecah per kata dan kartunya
+                jadi tinggi sekali, jadi lebih baik tombolnya turun ke baris
+                berikutnya daripada teksnya yang diperas. */}
+            <div style={{ flex: '1 1 140px', minWidth: 0 }}>
               <p style={{ fontSize: 14, fontWeight: 700 }}>
                 {walkin > 0 ? `${walkin} orang antre tanpa nomor` : 'Tidak ada antrean tanpa nomor'}
               </p>
@@ -242,9 +248,20 @@ export default function OperatorPanel({ slug }: { slug: string }) {
               {berjalan.status === 'called' ? 'SEDANG DIPANGGIL' : 'SEDANG BERFOTO'}
             </p>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 6, marginBottom: berjalan.status === 'called' ? 16 : 0 }}>
-              <span style={{ fontSize: 38, fontWeight: 800, lineHeight: 1 }}>{berjalan.nomor}</span>
-              <span style={{ fontSize: 15, opacity: .92 }}>{berjalan.nama || 'Tanpa nama'}</span>
-              <span style={{ marginLeft: 'auto', fontSize: 16, fontWeight: 700, letterSpacing: '.12em' }}>{berjalan.kode}</span>
+              <span style={{ fontSize: 'clamp(30px, 9vw, 38px)', fontWeight: 800, lineHeight: 1, flexShrink: 0 }}>
+                {berjalan.nomor}
+              </span>
+              {/* Nama yang menyusut dan terpotong. Kode TIDAK boleh ikut
+                  menyusut: itu yang dibacakan operator ke pengunjung. */}
+              <span style={{
+                fontSize: 15, opacity: .92, flex: 1, minWidth: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {berjalan.nama || 'Tanpa nama'}
+              </span>
+              <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: '.12em', flexShrink: 0 }}>
+                {berjalan.kode}
+              </span>
             </div>
             {berjalan.status === 'called' && (
               <div style={{ display: 'flex', gap: 8 }}>
