@@ -1,10 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+import { DASH_COOKIE, sesiSah } from '@/lib/dash-auth'
+
 /*
- * Satu deployment melayani dua domain:
- *   www.pabrikenangan.my.id  -> halaman sewa photobooth (publik)
- *   app.pabrikenangan.my.id  -> dasbor pengelolaan
+ * Satu deployment melayani tiga domain:
+ *   www.pabrikenangan.my.id   -> halaman sewa photobooth (publik)
+ *   app.pabrikenangan.my.id   -> dasbor pengelolaan (akun admin_users)
+ *   dash.pabrikenangan.my.id  -> dasbor talent pool (satu kata sandi bersama)
  *
  * Seluruh keputusan berbasis host ditaruh di berkas ini, bukan dibagi dengan
  * redirects() di next.config.ts. Alasannya terukur: proxy berjalan LEBIH DULU
@@ -15,6 +18,15 @@ import { NextResponse, type NextRequest } from 'next/server'
  */
 
 const APP = 'app.pabrikenangan.my.id'
+
+// Dasbor talent pool. Host ketiga di deployment yang sama, dengan pintu masuk
+// sendiri: satu kata sandi bersama, bukan akun admin_users seperti APP.
+const DASH = 'dash.pabrikenangan.my.id'
+
+// Halaman yang HANYA boleh hidup di host dash. Kalau alamatnya diketik di www
+// atau app, pengunjung dilempar ke dash supaya tidak ada dua pintu ke data
+// yang sama dengan penjagaan berbeda.
+const HALAMAN_DASH = ['/talent', '/masuk']
 
 /*
  * Bagian yang tinggal di dasbor. SENGAJA TIDAK termasuk:
@@ -36,6 +48,41 @@ export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl
   const host = request.headers.get('host') ?? ''
   const bagian = pathname.split('/')[1] ?? ''
+
+  // ── HOST DASH ──
+  // Ditangani lebih dulu daripada aturan lain: host ini tidak punya halaman
+  // sewa, tidak punya dasbor klien, dan tidak boleh ikut jatuh ke pemeriksaan
+  // sesi Supabase di bawah (yang akan melempar ke /login milik app).
+  // Di pengembangan, "dash.localhost:3112" ikut dihitung sebagai host dash.
+  // Tanpa ini dasbor talent tidak bisa dibuka dari browser lokal sama sekali —
+  // hanya lewat curl dengan header Host palsu, yang tidak bisa dipakai untuk
+  // memeriksa tampilannya.
+  const hostDash = host === DASH
+    || (process.env.NODE_ENV !== 'production' && host.startsWith('dash.'))
+
+  if (hostDash) {
+    if (pathname === '/masuk') return NextResponse.next()
+
+    const sandi = process.env.DASH_PASSWORD ?? ''
+    const sesi = request.cookies.get(DASH_COOKIE)?.value
+    if (!(await sesiSah(sesi, sandi))) {
+      return NextResponse.redirect(new URL('/masuk', request.url))
+    }
+
+    // Akar host ini ADALAH talent pool. Dipakai rewrite, bukan redirect,
+    // supaya alamat yang dibagikan tetap dash.pabrikenangan.my.id tanpa /talent
+    // menempel di belakangnya.
+    if (pathname === '/') return NextResponse.rewrite(new URL('/talent', request.url))
+    if (pathname.startsWith('/talent')) return NextResponse.next()
+
+    // Sisanya bukan milik host ini (halaman sewa, dasbor klien, unduhan tamu).
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // Halaman dash yang dibuka dari host lain dipindahkan ke dash.
+  if (HALAMAN_DASH.some((h) => pathname === h || pathname.startsWith(`${h}/`))) {
+    return NextResponse.redirect(new URL(pathname + search, `https://${DASH}`))
+  }
 
   // Dasbor yang dibuka di www dipindahkan ke app, beserta query-nya.
   if (host !== APP && DASBOR.has(bagian)) {
