@@ -200,13 +200,8 @@ export default function QueuePanel({
                   background: 'rgba(212,43,34,0.04)', border: `1px solid ${C.line}`,
                 }}>
                   <label htmlFor={`walkin-${d.id}`} style={{ fontSize: 13, fontWeight: 600, color: C.text, display: 'block' }}>
-                    Berapa orang sudah antre sekarang?
+                    Berapa orang sudah antre tanpa qr sekarang?
                   </label>
-                  <p style={{ fontSize: 12, color: C.faint, marginTop: 4, lineHeight: 1.55, maxWidth: '52ch' }}>
-                    Hitung yang sedang berfoto sekalian. Mereka belum punya nomor,
-                    jadi kios tetap menampilkan tombol mulai sampai barisan ini habis —
-                    dan estimasi tunggu pemegang nomor dihitung dari sini.
-                  </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
                     <input
                       id={`walkin-${d.id}`} type="number" min={0} max={30} inputMode="numeric"
@@ -238,6 +233,18 @@ export default function QueuePanel({
                       Batal
                     </button>
                   </div>
+
+                  {/*
+                    Satu kalimat, tapi seluruh hitungan bertumpu padanya.
+                    "Sudah antre" secara alami dibaca sebagai yang berdiri
+                    menunggu, jadi tanpa baris ini orang di dalam booth tidak
+                    ikut dihitung — dan saat sesinya selesai, hitungan turun
+                    satu lalu pemegang nomor dipanggil padahal masih ada orang
+                    berdiri di depannya.
+                  */}
+                  <p style={{ fontSize: 12, color: C.faint, marginTop: 10 }}>
+                    Termasuk yang sedang berfoto.
+                  </p>
                 </div>
               )}
 
