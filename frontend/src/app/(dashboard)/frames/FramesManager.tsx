@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { Plus, Loader2, Upload, Image as ImageIcon, Power, Trash2, Settings2, ChevronLeft, Check, AlertCircle } from 'lucide-react'
+import { Plus, Loader2, Upload, Image as ImageIcon, Power, Trash2, Settings2, ChevronLeft, Check, AlertCircle, Tags, ArrowUp, ArrowDown } from 'lucide-react'
 import FrameSlotEditor, { PhotoSlot } from './FrameSlotEditor'
 
 type FrameItem = {
@@ -18,6 +18,17 @@ type FrameItem = {
   created_at: string
   photo_slots: PhotoSlot[] | null
   paper_size: PaperSize | null
+  category_id: string | null
+}
+
+// Kategori dikelola manual dari halaman ini. Sengaja tidak diturunkan otomatis
+// dari paper_size atau photo_count: yang dicari pelanggan di layar kios adalah
+// TEMA (wisuda, halloween, koran), dan tema tidak pernah bisa ditebak mesin.
+type FrameCategory = {
+  id: string
+  name: string
+  sort_order: number
+  is_active: boolean
 }
 
 // Kertas cetak yang dikenali app (PrintService._paperInches) DAN driver
@@ -26,7 +37,7 @@ type FrameItem = {
 type PaperSize = '4R' | 'A5' | 'A4'
 const PAPER_SIZES: PaperSize[] = ['4R', 'A5', 'A4']
 
-type View = 'list' | 'create' | 'edit-slots'
+type View = 'list' | 'create' | 'edit-slots' | 'categories'
 
 // `paper` = kertas cetak yang wajar untuk preset itu; dipakai sebagai nilai
 // awal saat preset dipilih, tetap bisa ditimpa manual di bawahnya. Strip dan
@@ -62,11 +73,16 @@ async function compressImage(file: File, maxWidth: number, quality: number): Pro
 }
 
 export default function FramesManager({
-  initialFrames, clientId,
-}: { initialFrames: FrameItem[], clientId: string }) {
+  initialFrames, initialCategories, clientId,
+}: { initialFrames: FrameItem[], initialCategories: FrameCategory[], clientId: string }) {
   const supabase = createClient()
 
   const [frames, setFrames]               = useState<FrameItem[]>(initialFrames)
+  const [categories, setCategories]       = useState<FrameCategory[]>(initialCategories)
+  // Saringan daftar di dasbor: 'all' | 'none' (belum dikategorikan) | id kategori.
+  const [filterCat, setFilterCat]         = useState<string>('all')
+  const [newCatName, setNewCatName]       = useState('')
+  const [catBusy, setCatBusy]             = useState<string | null>(null)
   const [view, setView]                   = useState<View>('list')
   const [editingFrame, setEditingFrame]   = useState<FrameItem | null>(null)
   const [pendingSlots, setPendingSlots]   = useState<PhotoSlot[]>([])
@@ -80,7 +96,7 @@ export default function FramesManager({
   const [error, setError]                     = useState('')
   const [successMsg, setSuccessMsg]           = useState('')
 
-  const [form, setForm]             = useState<{ name:string; photo_count:number; output_width:number; output_height:number; paper_size:PaperSize }>({ name:'', photo_count:4, output_width:344, output_height:515, paper_size:'4R' })
+  const [form, setForm]             = useState<{ name:string; photo_count:number; output_width:number; output_height:number; paper_size:PaperSize; category_id:string }>({ name:'', photo_count:4, output_width:344, output_height:515, paper_size:'4R', category_id:'' })
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [preview, setPreview]       = useState<string | null>(null)
   const [dragOver, setDragOver]     = useState(false)
@@ -94,7 +110,7 @@ export default function FramesManager({
   }
 
   const resetCreate = () => {
-    setForm({ name:'', photo_count:4, output_width:344, output_height:515, paper_size:'4R' })
+    setForm({ name:'', photo_count:4, output_width:344, output_height:515, paper_size:'4R', category_id:'' })
     setSelectedFile(null); setPreview(null); setError(''); setPendingSlots([])
   }
 
@@ -126,6 +142,7 @@ export default function FramesManager({
         photo_count: form.photo_count, output_width: form.output_width,
         output_height: form.output_height, photo_slots: pendingSlots,
         paper_size: form.paper_size,
+        category_id: form.category_id || null,
         is_active: true, sort_order: frames.length + 1,
       }).select().single()
 
@@ -165,6 +182,99 @@ export default function FramesManager({
     if (!error) setFrames(prev => prev.filter(f => f.id!==id))
     setDeleteLoading(null)
   }
+
+  // ══════════════════════
+  // KATEGORI
+  // ══════════════════════
+
+  // Memindahkan frame ke kategori lain. Nilai '' berarti dikeluarkan dari
+  // kategori mana pun — frame TIDAK hilang, dia pindah ke "Lainnya" di kios.
+  const handleAssignCategory = async (frameId: string, categoryId: string) => {
+    const nilai = categoryId || null
+    setFrames(prev => prev.map(f => f.id===frameId ? {...f, category_id:nilai} : f))
+    const { error } = await supabase.from('frames').update({ category_id: nilai }).eq('id', frameId)
+    if (error) { setError('Gagal memindahkan kategori: ' + error.message); }
+  }
+
+  const handleCreateCategory = async () => {
+    const nama = newCatName.trim()
+    if (!nama) return
+    // Penjaga kedua setelah unique index di database, supaya operator dapat
+    // pesan yang bisa dibaca alih-alih galat Postgres.
+    if (categories.some(c => c.name.toLowerCase() === nama.toLowerCase())) {
+      setError(`Kategori "${nama}" sudah ada.`); return
+    }
+    setCatBusy('new'); setError('')
+    const { data, error } = await supabase.from('frame_categories').insert({
+      client_id: clientId, name: nama, is_active: true,
+      sort_order: categories.length ? Math.max(...categories.map(c=>c.sort_order)) + 1 : 1,
+    }).select().single()
+    if (error) setError(error.message)
+    else { setCategories(prev => [...prev, data]); setNewCatName(''); showSuccess(`Kategori "${nama}" dibuat.`) }
+    setCatBusy(null)
+  }
+
+  const handleRenameCategory = async (id: string, nama: string) => {
+    const bersih = nama.trim()
+    const lama = categories.find(c => c.id===id)
+    if (!bersih || !lama || bersih === lama.name) return
+    setCatBusy(id)
+    const { error } = await supabase.from('frame_categories').update({ name: bersih }).eq('id', id)
+    if (error) { setError(error.message); setCategories(prev => [...prev]) }
+    else setCategories(prev => prev.map(c => c.id===id ? {...c, name:bersih} : c))
+    setCatBusy(null)
+  }
+
+  const handleToggleCategory = async (id: string, cur: boolean) => {
+    setCatBusy(id)
+    const { error } = await supabase.from('frame_categories').update({ is_active: !cur }).eq('id', id)
+    if (!error) setCategories(prev => prev.map(c => c.id===id ? {...c, is_active:!cur} : c))
+    else setError(error.message)
+    setCatBusy(null)
+  }
+
+  // Urutan chip di kios = urutan di sini. Tukar sort_order dengan tetangganya;
+  // dua baris saja yang ditulis, jadi tidak perlu menomori ulang semuanya.
+  const handleMoveCategory = async (id: string, arah: -1 | 1) => {
+    const urut = [...categories].sort((a,b)=>a.sort_order-b.sort_order)
+    const i = urut.findIndex(c => c.id===id)
+    const j = i + arah
+    if (i < 0 || j < 0 || j >= urut.length) return
+    setCatBusy(id)
+    const a = urut[i], b = urut[j]
+    // sort_order bisa kembar untuk data lama; kalau begitu pakai indeks
+    // sebagai nilai baru supaya pertukarannya tetap terlihat.
+    const nilaiA = a.sort_order === b.sort_order ? j + 1 : b.sort_order
+    const nilaiB = a.sort_order === b.sort_order ? i + 1 : a.sort_order
+    const r1 = await supabase.from('frame_categories').update({ sort_order: nilaiA }).eq('id', a.id)
+    const r2 = await supabase.from('frame_categories').update({ sort_order: nilaiB }).eq('id', b.id)
+    if (r1.error || r2.error) setError((r1.error || r2.error)!.message)
+    else setCategories(prev => prev.map(c =>
+      c.id===a.id ? {...c, sort_order:nilaiA} : c.id===b.id ? {...c, sort_order:nilaiB} : c))
+    setCatBusy(null)
+  }
+
+  const handleDeleteCategory = async (id: string) => {
+    const dipakai = frames.filter(f => f.category_id===id).length
+    const nama = categories.find(c=>c.id===id)?.name ?? 'kategori ini'
+    if (!confirm(dipakai > 0
+      ? `Hapus "${nama}"? ${dipakai} frame di dalamnya TIDAK ikut terhapus, hanya kembali jadi tanpa kategori.`
+      : `Hapus "${nama}"?`)) return
+    setCatBusy(id)
+    const { error } = await supabase.from('frame_categories').delete().eq('id', id)
+    if (error) setError(error.message)
+    else {
+      setCategories(prev => prev.filter(c => c.id!==id))
+      // Database sudah memakai ON DELETE SET NULL; ini menyamakan tampilan
+      // tanpa perlu memuat ulang halaman.
+      setFrames(prev => prev.map(f => f.category_id===id ? {...f, category_id:null} : f))
+      if (filterCat === id) setFilterCat('all')
+      showSuccess(`Kategori "${nama}" dihapus.`)
+    }
+    setCatBusy(null)
+  }
+
+  const kategoriUrut = [...categories].sort((a,b)=>a.sort_order-b.sort_order)
 
   const inputCls: React.CSSProperties = {
     width:'100%', boxSizing:'border-box' as const,
@@ -242,6 +352,115 @@ export default function FramesManager({
             onChange={setPendingSlots}
           />
         </div>
+      </div>
+    )
+  }
+
+  // ══════════════════════
+  // VIEW: KATEGORI
+  // ══════════════════════
+  if (view === 'categories') {
+    const jumlahFrame = (id: string) => frames.filter(f => f.category_id === id).length
+    const tanpaKategori = frames.filter(f => !f.category_id).length
+
+    return (
+      <div style={{ fontFamily:"'Poppins',sans-serif", maxWidth:820, margin:'0 auto' }}>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+
+        <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:26 }}>
+          <button onClick={()=>{setView('list');setError('')}}
+            style={{ display:'flex', alignItems:'center', gap:6, background:'rgba(212,43,34,0.055)', border:'1px solid rgba(212,43,34,0.08)', borderRadius:9, padding:'8px 14px', color:'rgba(74,46,34,0.9)', cursor:'pointer', fontSize:13, fontFamily:"'Poppins',sans-serif" }}>
+            <ChevronLeft size={14}/>Kembali
+          </button>
+          <div>
+            <h2 style={{ color:'#150C09', fontSize:22, fontWeight:700, fontFamily:'Poppins,sans-serif', marginBottom:3 }}>Kategori Frame</h2>
+            <p style={{ color:'rgba(122,98,89,0.88)', fontSize:13 }}>
+              Urutan di sini = urutan chip di layar kios dan di HP pelanggan
+            </p>
+          </div>
+        </div>
+
+        {successMsg && (
+          <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:11, background:'rgba(16,185,129,.1)', border:'1px solid rgba(16,185,129,.2)', color:'#059669', fontSize:14, display:'flex', alignItems:'center', gap:9 }}>
+            <Check size={14}/>{successMsg}
+          </div>
+        )}
+        {error && (
+          <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:11, background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.15)', color:'#B82018', fontSize:13, display:'flex', alignItems:'center', gap:8 }}>
+            <AlertCircle size={13}/>{error}
+          </div>
+        )}
+
+        {/* Tambah kategori */}
+        <div style={{ display:'flex', gap:10, marginBottom:22 }}>
+          <input type="text" value={newCatName} placeholder="Nama kategori, misal: Wisuda"
+            onChange={e=>setNewCatName(e.target.value)}
+            onKeyDown={e=>{ if(e.key==='Enter') handleCreateCategory() }}
+            style={{...inputCls, flex:1}}
+            onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}
+            onBlur={e=>e.target.style.borderColor='rgba(212,43,34,0.08)'}/>
+          <button onClick={handleCreateCategory} disabled={catBusy==='new' || !newCatName.trim()}
+            style={{ display:'flex', alignItems:'center', gap:7, background:'linear-gradient(135deg,#E83530,#C02018)', border:'none', borderRadius:10, padding:'10px 20px', color:'#fff', fontSize:14, fontWeight:600, cursor:(catBusy==='new'||!newCatName.trim())?'not-allowed':'pointer', opacity:(catBusy==='new'||!newCatName.trim())?.6:1, fontFamily:"'Poppins',sans-serif", whiteSpace:'nowrap' }}>
+            {catBusy==='new'?<Loader2 size={14} style={{animation:'spin 1s linear infinite'}}/>:<Plus size={14}/>}Tambah
+          </button>
+        </div>
+
+        {kategoriUrut.length === 0 ? (
+          <div style={{ border:'2px dashed rgba(212,43,34,0.06)', borderRadius:18, padding:'56px 32px', textAlign:'center' }}>
+            <Tags size={44} color="rgba(212,43,34,0.12)" style={{margin:'0 auto 14px'}}/>
+            <p style={{color:'rgba(158,136,128,0.95)',fontSize:15,fontWeight:500}}>Belum ada kategori</p>
+            <p style={{color:'#9E8880',fontSize:13,marginTop:6}}>
+              Selama kategori aktif kurang dari dua, layar kios tampil persis seperti sekarang.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {kategoriUrut.map((c, i) => (
+              <div key={c.id}
+                style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(212,43,34,0.05)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:13, padding:'10px 12px', opacity:c.is_active?1:.55 }}>
+
+                <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                  <button onClick={()=>handleMoveCategory(c.id,-1)} disabled={i===0||catBusy===c.id} aria-label="Naikkan"
+                    style={{ width:26, height:20, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(212,43,34,0.05)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:5, color:'rgba(122,98,89,0.9)', cursor:i===0?'not-allowed':'pointer', opacity:i===0?.35:1 }}>
+                    <ArrowUp size={12}/>
+                  </button>
+                  <button onClick={()=>handleMoveCategory(c.id,1)} disabled={i===kategoriUrut.length-1||catBusy===c.id} aria-label="Turunkan"
+                    style={{ width:26, height:20, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(212,43,34,0.05)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:5, color:'rgba(122,98,89,0.9)', cursor:i===kategoriUrut.length-1?'not-allowed':'pointer', opacity:i===kategoriUrut.length-1?.35:1 }}>
+                    <ArrowDown size={12}/>
+                  </button>
+                </div>
+
+                {/* Ganti nama langsung di tempat; tersimpan saat fokus lepas. */}
+                <input defaultValue={c.name} key={`${c.id}-${c.name}`}
+                  onBlur={e=>handleRenameCategory(c.id, e.target.value)}
+                  onKeyDown={e=>{ if(e.key==='Enter') (e.target as HTMLInputElement).blur() }}
+                  style={{...inputCls, flex:1, padding:'8px 12px'}}
+                  onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}/>
+
+                <span style={{ background:'rgba(212,43,34,0.05)', color:'rgba(122,98,89,0.85)', border:'1px solid rgba(212,43,34,0.06)', borderRadius:6, padding:'4px 9px', fontSize:12, whiteSpace:'nowrap' }}>
+                  {jumlahFrame(c.id)} frame
+                </span>
+
+                <button onClick={()=>handleToggleCategory(c.id,c.is_active)} disabled={catBusy===c.id}
+                  style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 12px', background:c.is_active?'rgba(239,68,68,.08)':'rgba(16,185,129,.08)', border:`1px solid ${c.is_active?'rgba(239,68,68,.2)':'rgba(16,185,129,.2)'}`, borderRadius:8, color:c.is_active?'#B82018':'#059669', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif", whiteSpace:'nowrap' }}>
+                  {catBusy===c.id?<Loader2 size={12} style={{animation:'spin 1s linear infinite'}}/>:<Power size={12}/>}
+                  {c.is_active?'Off':'On'}
+                </button>
+
+                <button onClick={()=>handleDeleteCategory(c.id)} disabled={catBusy===c.id} aria-label="Hapus kategori"
+                  style={{ width:34, height:32, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(239,68,68,.07)', border:'1px solid rgba(239,68,68,.14)', borderRadius:8, color:'#B82018', cursor:'pointer' }}>
+                  <Trash2 size={12}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <p style={{ color:'rgba(158,136,128,0.9)', fontSize:12.5, marginTop:18, lineHeight:1.6 }}>
+          Kategori yang dimatikan ikut menyembunyikan frame di dalamnya dari kios dan HP pelanggan
+          - berguna saat kertas untuk kategori itu sedang tidak terpasang.
+          {tanpaKategori > 0 && ` Saat ini ${tanpaKategori} frame belum dikategorikan dan muncul di chip "Lainnya".`}
+        </p>
       </div>
     )
   }
@@ -400,6 +619,26 @@ export default function FramesManager({
               </p>
             </div>
 
+            {/* Kategori - boleh dikosongkan. Frame tanpa kategori tetap muncul
+                di kios, masuk kelompok "Lainnya". */}
+            <div>
+              <label style={labelCls}>Kategori</label>
+              <select value={form.category_id} onChange={e=>setForm(p=>({...p,category_id:e.target.value}))}
+                style={{...inputCls, width:'100%', cursor:'pointer'}}
+                onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}
+                onBlur={e=>e.target.style.borderColor='rgba(212,43,34,0.08)'}>
+                <option value="">- Tanpa kategori -</option>
+                {kategoriUrut.map(c=>(
+                  <option key={c.id} value={c.id}>{c.name}{c.is_active ? '' : ' (nonaktif)'}</option>
+                ))}
+              </select>
+              <p style={{ color:'rgba(158,136,128,0.85)', fontSize:11, marginTop:8, fontFamily:'Poppins,sans-serif' }}>
+                {categories.length === 0
+                  ? 'Belum ada kategori. Buat dulu lewat tombol Kategori di daftar frame.'
+                  : 'Menentukan chip mana yang menampilkan frame ini di layar kios dan di HP pelanggan.'}
+              </p>
+            </div>
+
             {error && (
               <div style={{ padding:'10px 14px', borderRadius:9, background:'rgba(239,68,68,.08)', border:'1px solid rgba(239,68,68,.15)', color:'#B82018', fontSize:13, display:'flex', gap:7, alignItems:'center' }}>
                 <AlertCircle size={13}/>{error}
@@ -457,6 +696,12 @@ export default function FramesManager({
   // ══════════════════════
   // VIEW: LIST
   // ══════════════════════
+  const tanpaKategori = frames.filter(f => !f.category_id).length
+  const framesTampil = frames.filter(f =>
+    filterCat === 'all'  ? true :
+    filterCat === 'none' ? !f.category_id :
+                           f.category_id === filterCat)
+
   return (
     <div style={{ fontFamily:"'Poppins',sans-serif", maxWidth:1200, margin:'0 auto' }}>
       <style>{`
@@ -476,15 +721,46 @@ export default function FramesManager({
           <h1 style={{ color:'#150C09', fontSize:28, fontWeight:700, fontFamily:'Poppins,sans-serif', marginBottom:4 }}>Manajemen Frame</h1>
           <p style={{ color:'rgba(122,98,89,0.88)', fontSize:14 }}>{frames.length} frame tersedia</p>
         </div>
-        <button onClick={()=>{resetCreate();setView('create')}}
-          style={{ display:'flex', alignItems:'center', gap:8, background:'linear-gradient(135deg,#E83530,#C02018)', border:'none', borderRadius:12, padding:'11px 20px', color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer', boxShadow:'0 4px 16px rgba(212,43,34,.35)', fontFamily:"'Poppins',sans-serif" }}>
-          <Plus size={16}/>Upload Frame
-        </button>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          <button onClick={()=>{setError('');setView('categories')}}
+            style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(212,43,34,0.055)', border:'1px solid rgba(212,43,34,0.1)', borderRadius:12, padding:'11px 18px', color:'rgba(74,46,34,0.9)', fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
+            <Tags size={16}/>Kategori{categories.length ? ` (${categories.length})` : ''}
+          </button>
+          <button onClick={()=>{resetCreate();setView('create')}}
+            style={{ display:'flex', alignItems:'center', gap:8, background:'linear-gradient(135deg,#E83530,#C02018)', border:'none', borderRadius:12, padding:'11px 20px', color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer', boxShadow:'0 4px 16px rgba(212,43,34,.35)', fontFamily:"'Poppins',sans-serif" }}>
+            <Plus size={16}/>Upload Frame
+          </button>
+        </div>
       </div>
 
       {successMsg && (
         <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:11, background:'rgba(16,185,129,.1)', border:'1px solid rgba(16,185,129,.2)', color:'#059669', fontSize:14, display:'flex', alignItems:'center', gap:9 }}>
           <Check size={14}/>{successMsg}
+        </div>
+      )}
+
+      {/* Saringan kategori. Tidak dirender sama sekali kalau belum ada
+          kategori, supaya halaman ini tidak berubah bagi klien yang tidak
+          memakai fitur ini. */}
+      {categories.length > 0 && (
+        <div style={{ display:'flex', gap:7, flexWrap:'wrap', marginBottom:18 }}>
+          {[
+            { id:'all',  label:'Semua',   n:frames.length, mati:false },
+            ...kategoriUrut.map(c => ({ id:c.id, label:c.name, n:frames.filter(f=>f.category_id===c.id).length, mati:!c.is_active })),
+            ...(tanpaKategori > 0 ? [{ id:'none', label:'Lainnya', n:tanpaKategori, mati:false }] : []),
+          ].map(chip => {
+            const aktif = filterCat === chip.id
+            return (
+              <button key={chip.id} onClick={()=>setFilterCat(chip.id)}
+                style={{ padding:'6px 13px', borderRadius:8, cursor:'pointer', fontFamily:"'Poppins',sans-serif", fontSize:13, fontWeight:600,
+                  background: aktif ? 'rgba(212,43,34,.16)' : 'rgba(212,43,34,0.035)',
+                  border: `1px solid ${aktif ? 'rgba(212,43,34,.4)' : 'rgba(212,43,34,0.07)'}`,
+                  color: aktif ? '#E83530' : 'rgba(122,98,89,0.88)',
+                  textDecoration: chip.mati ? 'line-through' : 'none' }}>
+                {chip.label} <span style={{ opacity:.65, fontWeight:500 }}>{chip.n}</span>
+              </button>
+            )
+          })}
         </div>
       )}
 
@@ -495,8 +771,18 @@ export default function FramesManager({
           <p style={{color:'#9E8880',fontSize:13,marginTop:6}}>Klik "Upload Frame" untuk menambahkan</p>
         </div>
       ) : (
+        framesTampil.length === 0 ? (
+        <div style={{ border:'2px dashed rgba(212,43,34,0.06)', borderRadius:18, padding:'56px 32px', textAlign:'center' }}>
+          <ImageIcon size={40} color="rgba(212,43,34,0.08)" style={{margin:'0 auto 14px'}}/>
+          <p style={{color:'rgba(158,136,128,0.95)',fontSize:15,fontWeight:500}}>Tidak ada frame di kategori ini</p>
+          <button onClick={()=>setFilterCat('all')}
+            style={{ marginTop:12, background:'none', border:'none', color:'#E83530', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
+            Tampilkan semua
+          </button>
+        </div>
+        ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(min(200px,100%),1fr))', gap:18 }}>
-          {frames.map((frame, i) => (
+          {framesTampil.map((frame, i) => (
             <div key={frame.id} className="fc"
               style={{ background:'rgba(212,43,34,0.05)', backdropFilter:'blur(20px)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:16, overflow:'hidden', boxShadow:'0 4px 14px rgba(0,0,0,.28)', position:'relative', animation:'fade-up .35s ease both', animationDelay:`${i*.04}s` }}>
 
@@ -526,6 +812,19 @@ export default function FramesManager({
                   </span>
                 </div>
 
+                {/* Pindah kategori tanpa masuk editor slot - operator biasanya
+                    merapikan belasan frame sekaligus, bukan satu per satu. */}
+                {categories.length > 0 && (
+                  <select value={frame.category_id ?? ''}
+                    onChange={e=>handleAssignCategory(frame.id, e.target.value)}
+                    style={{ width:'100%', boxSizing:'border-box', marginBottom:10, background:'rgba(212,43,34,0.04)', border:'1px solid rgba(212,43,34,0.08)', borderRadius:8, padding:'6px 9px', color:frame.category_id?'#150C09':'rgba(122,98,89,0.8)', fontSize:12.5, fontFamily:"'Poppins',sans-serif", cursor:'pointer', outline:'none' }}>
+                    <option value="">Tanpa kategori</option>
+                    {kategoriUrut.map(c=>(
+                      <option key={c.id} value={c.id}>{c.name}{c.is_active ? '' : ' (nonaktif)'}</option>
+                    ))}
+                  </select>
+                )}
+
                 <div style={{ display:'flex', gap:6 }}>
                   <button onClick={()=>{setEditingFrame(frame);setPendingSlots(frame.photo_slots??[]);setEditPaper(frame.paper_size ?? '4R');setView('edit-slots');setError('')}}
                     style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:4, padding:'7px 0', background:'rgba(212,43,34,.1)', border:'1px solid rgba(212,43,34,.2)', borderRadius:8, color:'#E83530', fontSize:12, fontWeight:600, cursor:'pointer', fontFamily:"'Poppins',sans-serif" }}>
@@ -545,6 +844,7 @@ export default function FramesManager({
             </div>
           ))}
         </div>
+        )
       )}
     </div>
   )

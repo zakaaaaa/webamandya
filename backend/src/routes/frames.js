@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const { supabase } = require('../middleware/validateDevice');
 const { resolveSettings } = require('../utils/settings');
+const { saringKategoriMati } = require('../utils/frame-categories');
 
 // GET /api/frames?hwid=xxx
 router.get('/', async (req, res) => {
@@ -34,7 +35,7 @@ router.get('/', async (req, res) => {
     // 2. Fetch frames milik client ini
     const { data: frames, error: framesError } = await supabase
       .from('frames')
-      .select('id, name, image_url, thumbnail_url, photo_count, output_width, output_height, sort_order, photo_slots, paper_size')
+      .select('id, name, image_url, thumbnail_url, photo_count, output_width, output_height, sort_order, photo_slots, paper_size, category_id')
       .eq('client_id', device.client_id)
       .eq('is_active', true)
       .eq('type', 'static')
@@ -44,6 +45,18 @@ router.get('/', async (req, res) => {
       return res.status(500).json({ success: false, message: 'Gagal mengambil data frame.' });
     }
 
+    // 3. Kategori ikut di payload yang sama, bukan endpoint terpisah. Halaman
+    // ini adalah layar pertama sesi dan sudah retry 3x; menambah request kedua
+    // berarti menambah satu titik gagal persis di depan pelanggan.
+    // Kategori gagal dimuat TIDAK boleh menggagalkan daftar frame — kios
+    // tinggal menyembunyikan chip-nya dan tampil seperti sebelum fitur ini ada.
+    const { data: categories } = await supabase
+      .from('frame_categories')
+      .select('id, name, sort_order')
+      .eq('client_id', device.client_id)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
     // Durasi harus berasal dari sumber yang sama dengan /bootstrap,
     // kalau tidak nilai di Flutter akan tertimpa nilai lama dari tabel clients.
     const settings = await resolveSettings(device.client_id, device.id);
@@ -51,7 +64,8 @@ router.get('/', async (req, res) => {
     return res.json({
       success: true,
       client_id: device.client_id,
-      frames: frames ?? [],
+      frames: saringKategoriMati(frames, categories),
+      categories: categories ?? [],
       session_duration_minutes: settings.session_duration_minutes,
     });
 

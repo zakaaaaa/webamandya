@@ -51,7 +51,8 @@ type Tiket = {
   dikabari: boolean
 }
 
-type Frame = { id: string; name: string; thumbnail_url: string | null; image_url: string | null }
+type Frame = { id: string; name: string; thumbnail_url: string | null; image_url: string | null; category_id: string | null }
+type KategoriFrame = { id: string; name: string }
 
 // Keadaan notifikasi yang DITAMPILKAN APA ADANYA. Kegagalan terburuk fitur ini
 // bukan push yang tidak terkirim, melainkan orang yang menjauh dari tenant
@@ -115,6 +116,9 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
   const [sibuk, setSibuk] = useState(false)
   const [galat, setGalat] = useState<string | null>(null)
   const [frames, setFrames] = useState<Frame[] | null>(null)
+  const [kategori, setKategori] = useState<KategoriFrame[]>([])
+  // null = chip "Semua"; 'none' = frame yang belum dikategorikan.
+  const [filterKat, setFilterKat] = useState<string | null>(null)
   const [bukaFrame, setBukaFrame] = useState(false)
 
   const kunciTiket = `antri:${slug}:tiket`
@@ -256,7 +260,11 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
     if (frames) return
     try {
       const r = await fetch(`${API}/api/queue/${slug}/frames`, { cache: 'no-store' })
-      if (r.ok) setFrames((await r.json()).frames || [])
+      if (r.ok) {
+        const j = await r.json()
+        setFrames(j.frames || [])
+        setKategori(j.categories || [])
+      }
     } catch { setFrames([]) }
   }
 
@@ -581,8 +589,45 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
                 Belum ada frame yang bisa dipilih. Kamu tetap bisa memilihnya nanti di booth.
               </p>
             ) : (
+              <>
+              {/* Chip kategori. Layar HP paling sempit dari ketiga layar yang
+                  menampilkan frame, jadi justru di sini saringannya paling
+                  terasa. Sama seperti di kios: kurang dari dua kelompok,
+                  chipnya tidak dirender sama sekali. */}
+              {(() => {
+                const isiKat = (id: string) => frames.filter(f => f.category_id === id).length
+                const tanpaKat = frames.filter(f => !f.category_id).length
+                const grup = kategori.filter(c => isiKat(c.id) > 0)
+                if (grup.length === 0 || (grup.length === 1 && tanpaKat === 0)) return null
+                return (
+                  <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>
+                    {[{ id: null as string | null, label: 'Semua' },
+                      ...grup.map(c => ({ id: c.id as string | null, label: c.name })),
+                      ...(tanpaKat > 0 ? [{ id: 'none' as string | null, label: 'Lainnya' }] : [])
+                    ].map(chip => {
+                      const aktif = filterKat === chip.id
+                      return (
+                        <button key={chip.id ?? 'all'} onClick={() => setFilterKat(chip.id)}
+                          style={{
+                            padding: '7px 14px', borderRadius: R_KENDALI - 4, cursor: 'pointer',
+                            fontSize: 13.5, fontWeight: 600, fontFamily: 'inherit',
+                            background: aktif ? C.aksen : C.papan,
+                            color: aktif ? C.ground : C.teks2,
+                            border: `1px solid ${aktif ? C.aksen : C.garis}`,
+                          }}>
+                          {chip.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
-                {frames.map((f) => {
+                {frames.filter(f =>
+                  filterKat === null   ? true :
+                  filterKat === 'none' ? !f.category_id :
+                                         f.category_id === filterKat
+                ).map((f) => {
                   const terpilih = tiket?.frame_id === f.id
                   return (
                     <button key={f.id} onClick={() => pilihFrame(f.id)} disabled={sibuk} aria-label={f.name}
@@ -597,6 +642,7 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
                   )
                 })}
               </div>
+              </>
             )}
           </div>
         </div>

@@ -4,6 +4,7 @@ const { supabase, validateDevice } = require('../middleware/validateDevice');
 const { kirimPush, pushAktif, kunciPublik } = require('../utils/webpush');
 const { resolveSettings } = require('../utils/settings');
 const { hitungPosisi, sisaSesiBerjalan, etaDetik, hitungEta } = require('../utils/queue-eta');
+const { saringKategoriMati } = require('../utils/frame-categories');
 
 // Antrean pelanggan photobooth.
 //
@@ -734,13 +735,26 @@ router.get('/:slug/frames', async (req, res) => {
 
     const { data } = await supabase
       .from('frames')
-      .select('id, name, thumbnail_url, image_url, photo_count, orientation, sort_order')
+      .select('id, name, thumbnail_url, image_url, photo_count, orientation, sort_order, category_id')
       .eq('client_id', state.devices.client_id)
       .eq('is_active', true)
       .eq('type', 'static')
       .order('sort_order', { ascending: true });
 
-    res.json({ success: true, frames: data || [] });
+    // Kategori harus sama persis dengan yang dilihat kios, kalau tidak orang
+    // yang memilih dari HP melihat daftar yang berbeda dari layar booth.
+    const { data: kategori } = await supabase
+      .from('frame_categories')
+      .select('id, name, sort_order')
+      .eq('client_id', state.devices.client_id)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    res.json({
+      success: true,
+      frames: saringKategoriMati(data, kategori),
+      categories: kategori || [],
+    });
   } catch (e) {
     console.error('[Queue] frames error:', e);
     res.status(500).json({ success: false, message: 'Server error.' });

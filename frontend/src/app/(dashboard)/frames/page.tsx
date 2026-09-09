@@ -19,9 +19,18 @@ export default async function FramesPage() {
     .eq('type', 'static')
     .order('sort_order', { ascending: true })
 
+  // Kategori yang nonaktif tetap dimuat di sini — dasbor perlu melihatnya
+  // untuk bisa menyalakannya lagi; yang disaring is_active hanya API kios.
+  const { data: categories } = await supabase
+    .from('frame_categories')
+    .select('*')
+    .eq('client_id', adminUser?.client_id)
+    .order('sort_order', { ascending: true })
+
   return (
     <FramesManager
       initialFrames={frames ?? []}
+      initialCategories={categories ?? []}
       clientId={adminUser?.client_id ?? ''}
     />
   )
