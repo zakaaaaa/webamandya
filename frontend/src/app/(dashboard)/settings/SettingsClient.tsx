@@ -8,9 +8,14 @@ interface Props {
   client: {
     id: string
     name: string
-    session_duration_minutes: number
   } | null
+  // client_settings.session_duration_minutes; null = baris belum ada, backend
+  // memakai default 5 menit (utils/settings.js).
+  durasiAwal: number | null
 }
+
+// Harus sama dengan DEFAULT_SETTINGS di backend/src/utils/settings.js.
+const DURASI_DEFAULT = 5
 
 const DURATION_PRESETS = [
   { label: "1 menit",   value: 1  },
@@ -21,9 +26,9 @@ const DURATION_PRESETS = [
   { label: "30 menit",  value: 30 },
 ]
 
-export default function SettingsClient({ client }: Props) {
+export default function SettingsClient({ client, durasiAwal }: Props) {
   const [duration, setDuration] = useState<number>(
-    client?.session_duration_minutes ?? 30
+    durasiAwal ?? DURASI_DEFAULT
   )
   const [loading, setLoading]   = useState(false)
   const [status,  setStatus]    = useState<'idle' | 'success' | 'error'>('idle')
@@ -40,10 +45,20 @@ export default function SettingsClient({ client }: Props) {
     setLoading(true)
     setStatus('idle')
 
-    const { error } = await supabase
-      .from('clients')
-      .update({ session_duration_minutes: duration })
-      .eq('id', client.id)
+    // Ditulis ke client_settings, satu-satunya sumber durasi yang dibaca
+    // backend. Klien yang belum punya barisnya dibuatkan; update dulu supaya
+    // tidak bergantung pada unique constraint client_id.
+    const { data: diubah, error: errUbah } = await supabase
+      .from('client_settings')
+      .update({ session_duration_minutes: duration, updated_at: new Date().toISOString() })
+      .eq('client_id', client.id)
+      .select('client_id')
+    let error = errUbah
+    if (!error && (!diubah || diubah.length === 0)) {
+      ({ error } = await supabase
+        .from('client_settings')
+        .insert({ client_id: client.id, session_duration_minutes: duration }))
+    }
 
     setLoading(false)
     if (error) {
