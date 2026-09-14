@@ -2,7 +2,25 @@ import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 
-export type AdminUser = { role: string; client_id: string | null; full_name: string | null }
+type Supabase = Awaited<ReturnType<typeof createServerSupabaseClient>>
+
+/*
+ * getClaims() punya titik gagal yang tidak dimiliki kode lama: ia mengambil
+ * JWKS dari Supabase. Kalau itu gagal sesaat (jaringan, Supabase lambat), admin
+ * yang sah TIDAK boleh dilempar ke /login — jatuh ke getUser() seperti dulu.
+ * Hanya "tidak ada sesi" / token ditolak yang berakhir di /login.
+ */
+async function idPengguna(supabase: Supabase): Promise<string | null> {
+  try {
+    const { data, error } = await supabase.auth.getClaims()
+    const sub = data?.claims?.sub
+    if (!error && typeof sub === 'string') return sub
+  } catch {}
+  const { data: { user } } = await supabase.auth.getUser()
+  return user?.id ?? null
+}
+
+export type AdminUser ={ role: string; client_id: string | null; full_name: string | null }
 
 /*
  * Identitas admin untuk satu request dasbor — dipanggil layout DAN page.
@@ -18,8 +36,7 @@ export type AdminUser = { role: string; client_id: string | null; full_name: str
  */
 export const ambilSesiAdmin = cache(async () => {
   const supabase = await createServerSupabaseClient()
-  const { data } = await supabase.auth.getClaims()
-  const userId = data?.claims?.sub
+  const userId = await idPengguna(supabase)
   if (!userId) redirect('/login')
 
   const { data: adminUser } = await supabase
