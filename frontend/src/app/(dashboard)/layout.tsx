@@ -14,12 +14,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+        /* Poppins sudah dimuat globals.css — @import kedua di sini hanya
+           menambah permintaan CSS yang memblokir render di tiap halaman. */
         *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
         body { font-family:'Poppins',sans-serif; }
-        @keyframes float-1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(30px,-25px)} }
-        @keyframes float-2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-20px,30px)} }
-        @keyframes float-3 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(15px,20px)} }
         @keyframes fade-up  { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fade-in  { from{opacity:0} to{opacity:1} }
         ::-webkit-scrollbar { width:6px; height:6px; }
@@ -86,25 +84,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
         background: '#FAF7F5',
         fontFamily: "'Poppins',sans-serif",
       }}>
-        {/* Soft red ambient orbs */}
-        {[
-          { w:600, h:600, style:{top:'-150px', left:'-150px'},     color:'rgba(232,53,48,0.06)',  anim:'float-1 18s ease-in-out infinite' },
-          { w:500, h:500, style:{bottom:'-100px', right:'-100px'}, color:'rgba(212,43,34,0.05)',  anim:'float-2 22s ease-in-out infinite' },
-          { w:350, h:350, style:{top:'40%', left:'40%'},            color:'rgba(217,119,6,0.04)',  anim:'float-3 26s ease-in-out infinite 4s' },
-        ].map((o, i) => (
-          <div key={i} style={{
-            position:'fixed', width:`${o.w}px`, height:`${o.h}px`, borderRadius:'50%',
-            filter:'blur(70px)', pointerEvents:'none', zIndex:0,
-            background:`radial-gradient(circle,${o.color} 0%,transparent 70%)`,
-            animation:o.anim, ...o.style,
-          }} />
-        ))}
-
-        {/* Subtle grid pattern */}
+        {/* Cahaya merah lembut + grid, dalam SATU lapisan statis.
+            Dulu tiga orb 350–600px ber-filter blur(70px) dengan animasi
+            infinite: blur sebesar itu dihitung ulang setiap frame di semua
+            halaman dasbor, dan itulah yang membuat dasbor terasa berat di
+            laptop/HP biasa. Radial-gradient tanpa filter tampak hampir sama
+            dan hanya dilukis sekali. */}
         <div style={{
           position:'fixed', inset:0, pointerEvents:'none', zIndex:0,
-          backgroundImage:'linear-gradient(rgba(212,43,34,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(212,43,34,0.025) 1px,transparent 1px)',
-          backgroundSize:'56px 56px',
+          backgroundImage: [
+            'radial-gradient(600px circle at 150px 150px, rgba(232,53,48,0.06), transparent 70%)',
+            'radial-gradient(500px circle at calc(100% - 150px) calc(100% - 150px), rgba(212,43,34,0.05), transparent 70%)',
+            'radial-gradient(350px circle at 55% 55%, rgba(217,119,6,0.04), transparent 70%)',
+            'linear-gradient(rgba(212,43,34,0.025) 1px,transparent 1px)',
+            'linear-gradient(90deg,rgba(212,43,34,0.025) 1px,transparent 1px)',
+          ].join(','),
+          backgroundSize:'100% 100%,100% 100%,100% 100%,56px 56px,56px 56px',
         }} />
 
         {/* Sidebar */}

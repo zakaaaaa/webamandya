@@ -141,7 +141,7 @@ export default function DevicesManager({
         </div>
 
         {/* Table */}
-        <div className="page-anim" style={{ background:'rgba(212,43,34,0.05)', backdropFilter:'blur(24px)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:'20px', overflow:'hidden', animationDelay:'0.05s' }}>
+        <div className="page-anim" style={{ background:'rgba(212,43,34,0.05)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:'20px', overflow:'hidden', animationDelay:'0.05s' }}>
           <div style={{ padding:'20px 24px', borderBottom:'1px solid rgba(212,43,34,0.055)', display:'flex', alignItems:'center', gap:'12px' }}>
             <div style={{ width:'32px', height:'32px', borderRadius:'10px', background:'rgba(212,43,34,0.15)', display:'flex', alignItems:'center', justifyContent:'center' }}>
               <Monitor size={16} color="#E83530" />

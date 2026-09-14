@@ -123,7 +123,6 @@ export default function ClientsManager({ initialClients }: { initialClients: Cli
         {/* Table */}
         <div className="page-anim" style={{
           background:'rgba(212,43,34,0.05)',
-          backdropFilter:'blur(24px)',
           border:'1px solid rgba(212,43,34,0.07)',
           borderRadius:'20px', overflow:'hidden',
           animationDelay:'0.05s',

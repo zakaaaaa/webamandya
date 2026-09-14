@@ -784,7 +784,7 @@ export default function FramesManager({
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(min(200px,100%),1fr))', gap:18 }}>
           {framesTampil.map((frame, i) => (
             <div key={frame.id} className="fc"
-              style={{ background:'rgba(212,43,34,0.05)', backdropFilter:'blur(20px)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:16, overflow:'hidden', boxShadow:'0 4px 14px rgba(0,0,0,.28)', position:'relative', animation:'fade-up .35s ease both', animationDelay:`${i*.04}s` }}>
+              style={{ background:'rgba(212,43,34,0.05)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:16, overflow:'hidden', boxShadow:'0 4px 14px rgba(0,0,0,.28)', position:'relative', animation:'fade-up .35s ease both', animationDelay:`${i*.04}s` }}>
 
               <div style={{ position:'absolute', top:9, left:9, right:9, zIndex:2, display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:5 }}>
                 <div style={{ background:frame.photo_slots?'rgba(212,43,34,.9)':'rgba(245,158,11,.85)', borderRadius:6, padding:'3px 8px', fontSize:11, fontWeight:700, color:'#150C09' }}>

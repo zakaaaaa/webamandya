@@ -111,8 +111,6 @@ export default function Sidebar({ role }: { role: string }) {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
-
         .sidebar-link {
           display: flex; align-items: center; gap: 11px;
           padding: 12px 12px; border-radius: 12px;

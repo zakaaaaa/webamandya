@@ -204,7 +204,7 @@ export default function ConsumablesPanel({
   return (
     <>
       <div className="page-anim" style={{
-        background: C.panel, backdropFilter: 'blur(24px)',
+        background: C.panel,
         border: `1px solid ${C.line}`, borderRadius: 20,
         overflow: 'hidden', marginBottom: 28, animationDelay: '0.03s',
         fontFamily: "'Poppins',sans-serif",
