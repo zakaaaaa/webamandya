@@ -27,11 +27,21 @@ export default async function FramesPage() {
     .eq('client_id', adminUser?.client_id)
     .order('sort_order', { ascending: true })
 
+  // Harga yang dipakai kategori tanpa harga sendiri. Unit yang punya
+  // session_price di device_settings bisa berbeda; dasbor hanya menampilkan
+  // harga level klien sebagai petunjuk. null kalau belum diatur/tak terbaca.
+  const { data: setelan } = await supabase
+    .from('client_settings')
+    .select('session_price')
+    .eq('client_id', adminUser?.client_id)
+    .maybeSingle()
+
   return (
     <FramesManager
       initialFrames={frames ?? []}
       initialCategories={categories ?? []}
       clientId={adminUser?.client_id ?? ''}
+      hargaDefault={setelan?.session_price ?? null}
     />
   )
 }

@@ -25,4 +25,29 @@ function saringKategoriMati(frames, kategoriAktif) {
   return daftar.filter((f) => !f.category_id || hidup.has(f.category_id));
 }
 
-module.exports = { saringKategoriMati };
+// Harga sesi sebuah frame: harga kategorinya kalau diisi, selain itu
+// session_price dari setelan. Harga kategori menimpa device_settings juga —
+// lihat sql/2026-09-14_frame_category_price.sql.
+//
+// hargaKategori null/undefined/tidak sah = kategori tanpa harga sendiri, atau
+// frame tanpa kategori. Nilai aneh dari database jatuh ke harga setelan,
+// bukan ke 0: sesi QRIS berharga 0 ditolak DOKU di depan pelanggan.
+function hargaSesi(settings, hargaKategori) {
+  const n = Number(hargaKategori);
+  if (hargaKategori !== null && hargaKategori !== undefined && Number.isInteger(n) && n > 0) {
+    return n;
+  }
+  return Number(settings?.session_price ?? 0);
+}
+
+// Kategori untuk payload kios/HP: harga efektifnya sudah dihitung di sini,
+// supaya kedua layar tidak perlu tahu aturan jatuh ke harga setelan.
+function kategoriDenganHarga(categories, settings) {
+  if (!Array.isArray(categories)) return [];
+  return categories.map(({ session_price, ...c }) => ({
+    ...c,
+    harga: hargaSesi(settings, session_price),
+  }));
+}
+
+module.exports = { saringKategoriMati, hargaSesi, kategoriDenganHarga };

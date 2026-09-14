@@ -22,6 +22,8 @@ app.use('/api/complaints',         require('./routes/complaints'));
 // Pekerja latar: mengantar hasil ke pelanggan yang sudah melapor, dan
 // mencoba lagi berkala selama berkasnya belum sampai server.
 require('./workers/pengirim').mulai();
+// Menutup sesi 'pending' yang ditinggal pelanggan tanpa membayar.
+require('./workers/penyapu-sesi').mulai();
 app.use('/api/payment',            require('./routes/payment'));
 app.use('/api/frames',             require('./routes/frames'));
 app.use('/api/queue',              require('./routes/queue'));

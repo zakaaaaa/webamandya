@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { saringKategoriMati } = require('../src/utils/frame-categories');
+const { saringKategoriMati, hargaSesi, kategoriDenganHarga } = require('../src/utils/frame-categories');
 
 const KATEGORI_AKTIF = [{ id: 'k-wisuda' }, { id: 'k-halloween' }];
 
@@ -39,4 +39,39 @@ test('semua kategori dimatikan: hanya frame tanpa kategori yang tersisa', () => 
 test('daftar frame kosong atau null aman', () => {
   assert.deepStrictEqual(saringKategoriMati(null, KATEGORI_AKTIF), []);
   assert.deepStrictEqual(saringKategoriMati([], KATEGORI_AKTIF), []);
+});
+
+// ── Harga per kategori ──
+
+const SETELAN = { session_price: 30000 };
+
+test('kategori berharga menimpa harga setelan (termasuk setelan unit)', () => {
+  assert.strictEqual(hargaSesi(SETELAN, 45000), 45000);
+  assert.strictEqual(hargaSesi({ session_price: 25000 }, 45000), 45000);
+});
+
+test('kategori tanpa harga dan frame tanpa kategori memakai harga setelan', () => {
+  assert.strictEqual(hargaSesi(SETELAN, null), 30000);
+  assert.strictEqual(hargaSesi(SETELAN, undefined), 30000);
+});
+
+// Harga 0 atau rusak TIDAK boleh jadi tagihan 0 — DOKU menolak order Rp0
+// tepat di depan pelanggan.
+test('harga kategori tidak sah jatuh ke harga setelan, bukan ke nol', () => {
+  for (const aneh of [0, -5000, 12.5, 'abc', NaN]) {
+    assert.strictEqual(hargaSesi(SETELAN, aneh), 30000, String(aneh));
+  }
+  assert.strictEqual(hargaSesi(SETELAN, '40000'), 40000);
+});
+
+test('payload kategori membawa harga efektif tanpa kolom mentahnya', () => {
+  const hasil = kategoriDenganHarga(
+    [{ id: 'k1', name: 'Wisuda', session_price: 45000 }, { id: 'k2', name: 'Koran', session_price: null }],
+    SETELAN,
+  );
+  assert.deepStrictEqual(hasil, [
+    { id: 'k1', name: 'Wisuda', harga: 45000 },
+    { id: 'k2', name: 'Koran', harga: 30000 },
+  ]);
+  assert.deepStrictEqual(kategoriDenganHarga(null, SETELAN), []);
 });

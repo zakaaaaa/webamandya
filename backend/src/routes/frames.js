@@ -2,7 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const { supabase } = require('../middleware/validateDevice');
 const { resolveSettings } = require('../utils/settings');
-const { saringKategoriMati } = require('../utils/frame-categories');
+const { saringKategoriMati, kategoriDenganHarga, hargaSesi } = require('../utils/frame-categories');
 
 // GET /api/frames?hwid=xxx
 router.get('/', async (req, res) => {
@@ -52,7 +52,7 @@ router.get('/', async (req, res) => {
     // tinggal menyembunyikan chip-nya dan tampil seperti sebelum fitur ini ada.
     const { data: categories } = await supabase
       .from('frame_categories')
-      .select('id, name, sort_order')
+      .select('id, name, sort_order, session_price')
       .eq('client_id', device.client_id)
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
@@ -65,7 +65,11 @@ router.get('/', async (req, res) => {
       success: true,
       client_id: device.client_id,
       frames: saringKategoriMati(frames, categories),
-      categories: categories ?? [],
+      // harga = harga efektif (kategori, atau session_price kalau kosong);
+      // harga_default dipakai chip "Lainnya". Hanya untuk ditampilkan — yang
+      // ditagih selalu dihitung ulang server (utils/harga-sesi.js).
+      categories: kategoriDenganHarga(categories, settings),
+      harga_default: hargaSesi(settings, null),
       session_duration_minutes: settings.session_duration_minutes,
     });
 

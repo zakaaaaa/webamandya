@@ -4,7 +4,7 @@ const { supabase, validateDevice } = require('../middleware/validateDevice');
 const { kirimPush, pushAktif, kunciPublik } = require('../utils/webpush');
 const { resolveSettings } = require('../utils/settings');
 const { hitungPosisi, sisaSesiBerjalan, etaDetik, hitungEta } = require('../utils/queue-eta');
-const { saringKategoriMati } = require('../utils/frame-categories');
+const { saringKategoriMati, kategoriDenganHarga, hargaSesi } = require('../utils/frame-categories');
 
 // Antrean pelanggan photobooth.
 //
@@ -745,15 +745,19 @@ router.get('/:slug/frames', async (req, res) => {
     // yang memilih dari HP melihat daftar yang berbeda dari layar booth.
     const { data: kategori } = await supabase
       .from('frame_categories')
-      .select('id, name, sort_order')
+      .select('id, name, sort_order, session_price')
       .eq('client_id', state.devices.client_id)
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
 
+    // Harga di HP harus sama dengan chip kios: setelan unit booth ini.
+    const setelan = await resolveSettings(state.devices.client_id, state.device_id);
+
     res.json({
       success: true,
       frames: saringKategoriMati(data, kategori),
-      categories: kategori || [],
+      categories: kategoriDenganHarga(kategori, setelan),
+      harga_default: hargaSesi(setelan, null),
     });
   } catch (e) {
     console.error('[Queue] frames error:', e);

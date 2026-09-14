@@ -1,31 +1,55 @@
 const express = require('express');
 const router = express.Router();
-const { supabase } = require('../middleware/validateDevice');
 const axios = require('axios');
 const { v4: uuidv4 } = require('uuid');
-const { generateSignature, generateSignatureGet, getTimestamp } = require('../utils/doku');
+const { supabase } = require('../middleware/validateDevice');
+const { generateSignature, getTimestamp } = require('../utils/doku');
+const {
+  KOLOM_SESI,
+  DOKU_BASE_URL,
+  rekonsiliasiSesi,
+  buatInvoice,
+  simpanStatusInvoice,
+  bukaKembaliSesi,
+} = require('../utils/pembayaran');
+const { sesiBasi } = require('../utils/pembayaran-logika');
+const { sesuaikanHargaSesi } = require('../utils/harga-sesi');
 
-const DOKU_BASE_URL = process.env.DOKU_BASE_URL || 'https://api.doku.com';
+async function cariSesi(transactionCode) {
+  const { data, error } = await supabase
+    .from('sessions')
+    .select(KOLOM_SESI)
+    .eq('transaction_code', transactionCode)
+    .maybeSingle();
+  if (error) throw new Error(`Gagal membaca sesi: ${error.message}`);
+  return data;
+}
 
 // POST /api/payment/generate  (dipanggil generatePaymentLink() Flutter)
+//
+// Satu sesi boleh punya banyak percobaan bayar ("Coba Lagi", kembali ke menu
+// lalu QRIS lagi). Tiap panggilan membuat invoice DOKU BARU yang menempel ke
+// baris sesi yang sama — invoice_number tidak boleh dipakai dua kali di DOKU,
+// dan dulu itulah alasan kiosk membuat baris sesi kedua yang lalu mengendap
+// 'pending' di dasbor.
 router.post('/generate', async (req, res) => {
-  const { session_uuid } = req.body;
+  // frame_id opsional (app baru): frame yang sedang dipakai pelanggan, jaring
+  // pengaman kalau attach-frame di latar gagal. Diperiksa milik klien sesi.
+  const { session_uuid, frame_id } = req.body;
+
+  if (!session_uuid) {
+    return res.status(400).json({ success: false, message: 'session_uuid wajib diisi.' });
+  }
 
   try {
     // 1. Dapatkan sesi dan kredensial DOKU klien
-    const { data: session, error: sessErr } = await supabase
-      .from('sessions')
-      .select('id, payment_status, client_id, amount, clients(doku_client_id, doku_secret_key)')
-      .eq('transaction_code', session_uuid)
-      .single();
-
-    if (sessErr || !session) {
-      console.error('[Payment] Session error:', sessErr);
+    const session = await cariSesi(session_uuid);
+    if (!session) {
       return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
     }
 
     if (session.payment_status === 'paid' || session.payment_status === 'free') {
-      return res.status(400).json({ success: false, message: 'Transaksi ini sudah lunas.' });
+      return res.status(400).json({ success: false, message: 'Transaksi ini sudah lunas.', status: session.payment_status });
     }
 
     const { doku_client_id, doku_secret_key } = session.clients || {};
@@ -33,15 +57,28 @@ router.post('/generate', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Kredensial DOKU belum diatur untuk klien ini.' });
     }
 
-    // 2. Siapkan request ke DOKU Checkout
+    // 2. QR lama bisa saja sudah dibayar tepat sebelum pelanggan menekan
+    //    "Coba Lagi" — jangan sampai ia ditagih dua kali.
+    const cek = await rekonsiliasiSesi(session);
+    if (cek.status === 'paid' || cek.status === 'free') {
+      return res.status(400).json({ success: false, message: 'Transaksi ini sudah lunas.', status: cek.status });
+    }
+
+    // 3. Catat invoice SEBELUM order dibuat, supaya webhook dan polling
+    //    selalu bisa menemukan sesinya.
+    //    Harga ditetapkan ulang dari kategori frame tepat sebelum ditagih —
+    //    inilah angka yang benar-benar masuk ke order DOKU.
+    const sesiBerharga = await sesuaikanHargaSesi(session, { frameId: frame_id });
+    const amountNum = parseInt(sesiBerharga.amount) || 0;
+    const invoiceNumber = await buatInvoice(sesiBerharga, amountNum);
+
     const targetPath = '/checkout/v1/payment';
     const requestId = uuidv4();
     const timestamp = getTimestamp();
-    const amountNum = parseInt(session.amount) || 0;
 
     const requestBody = {
       order: {
-        invoice_number: session_uuid,
+        invoice_number: invoiceNumber,
         amount: amountNum
       },
       payment: {
@@ -53,7 +90,6 @@ router.post('/generate', async (req, res) => {
       }
     };
 
-    // 3. Generate Signature (HMAC SHA256 — simpel!)
     const signature = generateSignature(
       doku_client_id,
       doku_secret_key,
@@ -64,25 +100,32 @@ router.post('/generate', async (req, res) => {
     );
 
     // 4. Hit DOKU Checkout API
-    console.log('[Payment] Hitting DOKU Checkout for:', session_uuid);
-    console.log('[Payment] URL:', `${DOKU_BASE_URL}${targetPath}`);
+    console.log('[Payment] Hitting DOKU Checkout for:', session_uuid, 'invoice:', invoiceNumber);
     console.log('[Payment] Body:', JSON.stringify(requestBody));
-    console.log('[Payment] Headers:', JSON.stringify({
-      'Client-Id': doku_client_id,
-      'Request-Id': requestId,
-      'Request-Timestamp': timestamp,
-      'Signature': signature,
-    }));
 
-    const dokuResponse = await axios.post(`${DOKU_BASE_URL}${targetPath}`, requestBody, {
-      headers: {
-        'Client-Id': doku_client_id,
-        'Request-Id': requestId,
-        'Request-Timestamp': timestamp,
-        'Signature': signature,
-        'Content-Type': 'application/json'
+    let dokuResponse;
+    try {
+      dokuResponse = await axios.post(`${DOKU_BASE_URL}${targetPath}`, requestBody, {
+        headers: {
+          'Client-Id': doku_client_id,
+          'Request-Id': requestId,
+          'Request-Timestamp': timestamp,
+          'Signature': signature,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000,
+      });
+    } catch (error) {
+      // 4xx = DOKU menolak, order pasti tidak terbentuk. Selain itu (timeout,
+      // 5xx) order MUNGKIN terbentuk, jadi invoice dibiarkan 'pending' dan
+      // rekonsiliasi yang memastikan nanti.
+      const kode = error?.response?.status;
+      if (kode >= 400 && kode < 500) {
+        await simpanStatusInvoice(invoiceNumber, 'failed').catch((e) =>
+          console.error('[Payment] Gagal menandai invoice failed:', e.message));
       }
-    });
+      throw error;
+    }
 
     console.log('[Payment] DOKU response:', JSON.stringify(dokuResponse.data));
 
@@ -95,10 +138,17 @@ router.post('/generate', async (req, res) => {
       return res.status(500).json({ success: false, message: 'Gagal mendapatkan URL pembayaran.' });
     }
 
+    // Sesi yang sempat ditutup (penyapu/abandon) tapi dipakai lagi oleh kiosk
+    // harus kembali 'pending' selama ada order yang bisa dibayar.
+    if (session.payment_status !== 'pending') {
+      await bukaKembaliSesi(session.id);
+    }
+
     return res.status(200).json({
       success: true,
       payment_url: paymentUrl,
       qr_content: qrContent || null,
+      invoice_number: invoiceNumber,
       message: 'Berhasil generate link pembayaran'
     });
 
@@ -112,20 +162,24 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-// POST /api/payment/check-status  (polling tiap 2 detik dari Flutter)
+// POST /api/payment/check-status  (polling tiap 2 detik dari Flutter, dan
+// tombol "Cek DOKU" di dasbor transaksi)
 //
 // PENTING: jangan hanya membaca payment_status dari database. Webhook DOKU
 // (/notification) tidak selalu dikonfigurasi di back office DOKU, sehingga status
 // bisa tidak pernah berubah dan aplikasi mentok di halaman pembayaran.
-// Karena itu di sini kita AKTIF menanyakan status order ke DOKU.
+// Karena itu di sini kita AKTIF menanyakan SEMUA invoice sesi yang masih
+// terbuka ke DOKU — termasuk QR lama dari percobaan sebelumnya.
 router.post('/check-status', async (req, res) => {
   const { session_uuid } = req.body;
 
-  const { data: session } = await supabase
-    .from('sessions')
-    .select('id, payment_status, clients(doku_client_id, doku_secret_key)')
-    .eq('transaction_code', session_uuid)
-    .maybeSingle();
+  let session;
+  try {
+    session = session_uuid ? await cariSesi(session_uuid) : null;
+  } catch (e) {
+    console.error('[Payment] check-status:', e.message);
+    return res.status(500).json({ success: false, message: 'Gagal membaca sesi.' });
+  }
 
   if (!session) {
     return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
@@ -136,115 +190,73 @@ router.post('/check-status', async (req, res) => {
     return res.status(200).json({ status: session.payment_status });
   }
 
-  const { doku_client_id, doku_secret_key } = session.clients || {};
-  if (!doku_client_id || !doku_secret_key) {
-    return res.status(200).json({ status: session.payment_status });
-  }
-
   try {
-    const targetPath = `/orders/v1/status/${session_uuid}`;
-    const requestId = uuidv4();
-    const timestamp = getTimestamp();
-    const signature = generateSignatureGet(doku_client_id, doku_secret_key, requestId, timestamp, targetPath);
-
-    const dokuResponse = await axios.get(`${DOKU_BASE_URL}${targetPath}`, {
-      headers: {
-        'Client-Id': doku_client_id,
-        'Request-Id': requestId,
-        'Request-Timestamp': timestamp,
-        'Signature': signature,
-      },
-      timeout: 10000,
-    });
-
-    const txStatus = dokuResponse.data?.transaction?.status;
-    const orderStatus = dokuResponse.data?.order?.status;
-
-    if (txStatus === 'SUCCESS') {
-      await supabase
-        .from('sessions')
-        .update({ payment_status: 'paid', paid_at: new Date().toISOString() })
-        .eq('id', session.id);
-
-      console.log('[Payment] ✅ Terdeteksi LUNAS via polling DOKU:', session_uuid);
-      return res.status(200).json({ status: 'paid' });
+    // Sesi yang lama tidak berubah berarti pelanggannya sudah pergi: boleh
+    // ditutup kalau DOKU membuktikan tidak ada yang dibayar. Sesi yang masih
+    // berjalan TIDAK ditutup — pelanggan mungkin sedang mencoba lagi.
+    const hasil = await rekonsiliasiSesi(session, { tutup: sesiBasi(session.updated_at) });
+    if (hasil.berubah) {
+      console.log(`[Payment] Sesi ${session_uuid}: ${session.payment_status} → ${hasil.status}.`);
     }
-
-    // PENTING: untuk QRIS yang tidak jadi dibayar, DOKU TIDAK pernah mengubah
-    // transaction.status — nilainya tetap 'PENDING' selamanya. Yang berubah
-    // adalah order.status menjadi 'ORDER_EXPIRED'. Kalau hanya transaction.status
-    // yang dibaca, sesi tidak pernah keluar dari 'pending' dan menumpuk di
-    // dashboard (terbukti: 23 order ORDER_EXPIRED masih tercatat pending).
-    const kedaluwarsa =
-      orderStatus === 'ORDER_EXPIRED' ||
-      txStatus === 'EXPIRED' ||
-      txStatus === 'FAILED';
-
-    if (kedaluwarsa) {
-      const statusBaru = txStatus === 'FAILED' ? 'failed' : 'expired';
-      await supabase
-        .from('sessions')
-        .update({ payment_status: statusBaru })
-        .eq('id', session.id);
-
-      console.log(`[Payment] Sesi ${session_uuid} ditutup sebagai ${statusBaru} (order=${orderStatus}, transaction=${txStatus}).`);
-      return res.status(200).json({ status: statusBaru, doku_status: txStatus || null, order_status: orderStatus || null });
-    }
-
-    return res.status(200).json({ status: session.payment_status, doku_status: txStatus || null, order_status: orderStatus || null });
+    return res.status(200).json({ status: hasil.status });
   } catch (error) {
-    // Kalau DOKU tidak bisa dihubungi, jangan gagalkan polling —
+    // Kalau DOKU/DB bermasalah, jangan gagalkan polling —
     // kembalikan status terakhir yang tersimpan supaya app tetap menunggu.
-    console.error('[Payment] Gagal cek status ke DOKU:', error?.response?.data || error.message);
+    console.error('[Payment] Gagal cek status:', error.message);
     return res.status(200).json({ status: session.payment_status });
   }
 });
 
 // POST /api/payment/notification (DOKU Webhook — dipanggil DOKU saat customer bayar)
+//
+// Isi body TIDAK dipercaya: endpoint ini publik dan tanda tangan DOKU tidak
+// diverifikasi, jadi siapa pun bisa mengirim "SUCCESS" palsu. Notifikasi hanya
+// dipakai sebagai pemicu — status sebenarnya ditanyakan langsung ke DOKU.
 router.post('/notification', async (req, res) => {
   try {
     console.log('[Webhook] DOKU notification received:', JSON.stringify(req.body));
 
     // DOKU Checkout mengirim order.invoice_number di notification
     const invoiceNumber = req.body?.order?.invoice_number;
-    if (!invoiceNumber) {
+    if (!invoiceNumber || typeof invoiceNumber !== 'string') {
       return res.status(400).send('Invalid payload');
     }
 
-    // Cari sesi
-    const { data: session } = await supabase
-      .from('sessions')
-      .select('id, payment_status')
-      .eq('transaction_code', invoiceNumber)
-      .single();
+    const { data: invoice, error: invErr } = await supabase
+      .from('payment_invoices')
+      .select('session_id')
+      .eq('invoice_number', invoiceNumber)
+      .maybeSingle();
+    if (invErr) throw new Error(`Gagal membaca invoice: ${invErr.message}`);
+
+    let session = null;
+    if (invoice) {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select(KOLOM_SESI)
+        .eq('id', invoice.session_id)
+        .maybeSingle();
+      if (error) throw new Error(`Gagal membaca sesi: ${error.message}`);
+      session = data;
+    } else {
+      // Order dari app versi lama: invoice_number = transaction_code.
+      session = await cariSesi(invoiceNumber);
+      if (session?.payment_status === 'paid') {
+        return res.status(200).send('Already paid');
+      }
+    }
 
     if (!session) {
       return res.status(404).send('Session not found');
     }
 
-    if (session.payment_status === 'paid') {
-      return res.status(200).send('Already paid');
+    const hasil = await rekonsiliasiSesi(session);
+    if (hasil.berubah) {
+      console.log(`[Webhook] Sesi ${session.transaction_code}: ${session.payment_status} → ${hasil.status} (invoice ${invoiceNumber}).`);
     }
-
-    // DOKU Checkout notification: transaction.status = 'SUCCESS'
-    const txStatus = req.body?.transaction?.status;
-
-    if (txStatus === 'SUCCESS') {
-      // paid_at wajib diisi di sini juga: jalur polling mengisinya, jalur webhook
-      // dulu tidak, sehingga 27 dari 33 sesi lunas tidak punya waktu bayar.
-      await supabase
-        .from('sessions')
-        .update({ payment_status: 'paid', paid_at: new Date().toISOString() })
-        .eq('transaction_code', invoiceNumber);
-
-      console.log('[Webhook] ✅ Payment marked as PAID for:', invoiceNumber);
-    } else if (txStatus === 'EXPIRED' || txStatus === 'FAILED') {
-      await supabase
-        .from('sessions')
-        .update({ payment_status: txStatus === 'FAILED' ? 'failed' : 'expired' })
-        .eq('transaction_code', invoiceNumber);
-
-      console.log(`[Webhook] Sesi ${invoiceNumber} ditandai ${txStatus}.`);
+    // DOKU tidak bisa ditanya balik: minta DOKU mengirim ulang nanti.
+    if (hasil.takTerjawab) {
+      return res.status(503).send('Retry later');
     }
 
     return res.status(200).send('OK');

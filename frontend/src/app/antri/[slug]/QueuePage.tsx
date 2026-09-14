@@ -52,7 +52,11 @@ type Tiket = {
 }
 
 type Frame = { id: string; name: string; thumbnail_url: string | null; image_url: string | null; category_id: string | null }
-type KategoriFrame = { id: string; name: string }
+// harga = harga sesi efektif kategori (server sudah menjatuhkannya ke harga
+// setelan kalau kosong). Tidak ada di backend lama.
+type KategoriFrame = { id: string; name: string; harga?: number }
+
+const rupiah = (n: number) => `Rp${n.toLocaleString('id-ID')}`
 
 // Keadaan notifikasi yang DITAMPILKAN APA ADANYA. Kegagalan terburuk fitur ini
 // bukan push yang tidak terkirim, melainkan orang yang menjauh dari tenant
@@ -117,6 +121,7 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
   const [galat, setGalat] = useState<string | null>(null)
   const [frames, setFrames] = useState<Frame[] | null>(null)
   const [kategori, setKategori] = useState<KategoriFrame[]>([])
+  const [hargaDefault, setHargaDefault] = useState<number | undefined>(undefined)
   // null = chip "Semua"; 'none' = frame yang belum dikategorikan.
   const [filterKat, setFilterKat] = useState<string | null>(null)
   const [bukaFrame, setBukaFrame] = useState(false)
@@ -264,6 +269,7 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
         const j = await r.json()
         setFrames(j.frames || [])
         setKategori(j.categories || [])
+        setHargaDefault(typeof j.harga_default === 'number' ? j.harga_default : undefined)
       }
     } catch { setFrames([]) }
   }
@@ -599,11 +605,19 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
                 const tanpaKat = frames.filter(f => !f.category_id).length
                 const grup = kategori.filter(c => isiKat(c.id) > 0)
                 if (grup.length === 0 || (grup.length === 1 && tanpaKat === 0)) return null
+                // Harga hanya ditulis kalau kelompok yang tampil memang beda
+                // harga — aturan yang sama dengan chip di kios.
+                const hargaKelompok = [
+                  ...grup.map(c => c.harga),
+                  ...(tanpaKat > 0 ? [hargaDefault] : []),
+                ]
+                const tampilHarga = hargaKelompok.every(h => typeof h === 'number')
+                  && new Set(hargaKelompok).size > 1
                 return (
                   <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>
-                    {[{ id: null as string | null, label: 'Semua' },
-                      ...grup.map(c => ({ id: c.id as string | null, label: c.name })),
-                      ...(tanpaKat > 0 ? [{ id: 'none' as string | null, label: 'Lainnya' }] : [])
+                    {[{ id: null as string | null, label: 'Semua', harga: undefined as number | undefined },
+                      ...grup.map(c => ({ id: c.id as string | null, label: c.name, harga: c.harga })),
+                      ...(tanpaKat > 0 ? [{ id: 'none' as string | null, label: 'Lainnya', harga: hargaDefault }] : [])
                     ].map(chip => {
                       const aktif = filterKat === chip.id
                       return (
@@ -616,6 +630,9 @@ export default function QueuePage({ slug, boothName }: { slug: string; boothName
                             border: `1px solid ${aktif ? C.aksen : C.garis}`,
                           }}>
                           {chip.label}
+                          {tampilHarga && typeof chip.harga === 'number' && (
+                            <span style={{ fontWeight: 500, opacity: 0.8, marginLeft: 6 }}>{rupiah(chip.harga)}</span>
+                          )}
                         </button>
                       )
                     })}

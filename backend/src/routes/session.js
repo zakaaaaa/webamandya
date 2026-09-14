@@ -1,12 +1,69 @@
 const express = require('express');
 const router = express.Router();
-const axios = require('axios');
-const { v4: uuidv4 } = require('uuid');
 const { supabase, validateDevice } = require('../middleware/validateDevice');
 const { resolveSettings } = require('../utils/settings');
-const { generateSignatureGet, getTimestamp } = require('../utils/doku');
+const { KOLOM_SESI, rekonsiliasiSesi } = require('../utils/pembayaran');
+const { STATUS_BELUM_LUNAS } = require('../utils/pembayaran-logika');
+const { hargaSesi } = require('../utils/frame-categories');
+const { hargaKategoriFrame, sesuaikanHargaSesi } = require('../utils/harga-sesi');
 
-const DOKU_BASE_URL = process.env.DOKU_BASE_URL || 'https://api.doku.com';
+function metodeDiizinkan(settings) {
+  return Array.isArray(settings.payment_methods_enabled)
+    ? settings.payment_methods_enabled
+    : ['qris', 'voucher'];
+}
+
+/**
+ * Validasi voucher dan hitung harga akhirnya. Dipakai /start (app lama) dan
+ * /redeem-voucher (sesi yang sudah ada).
+ * @returns {Promise<{ gagal: object } | { voucher: object, final_amount: number }>}
+ */
+async function periksaVoucher({ settings, client_id, code, original_amount }) {
+  const gagal = (message, kode) => ({ gagal: { success: false, message, code: kode } });
+
+  if (!settings.voucher_enabled) {
+    return gagal('Voucher tidak diaktifkan untuk unit ini.', 'VOUCHER_DISABLED');
+  }
+  if (!code) {
+    return gagal('Kode voucher wajib diisi.', 'MISSING_VOUCHER_CODE');
+  }
+
+  const { data: voucher, error: vErr } = await supabase
+    .from('vouchers')
+    .select('*')
+    .eq('code', code)
+    .eq('client_id', client_id)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (vErr || !voucher) {
+    return gagal('Kode voucher tidak valid.', 'VOUCHER_INVALID');
+  }
+  if (voucher.max_uses && voucher.used_count >= voucher.max_uses) {
+    return gagal('Voucher sudah habis digunakan.', 'VOUCHER_EXHAUSTED');
+  }
+  if (voucher.valid_from && new Date() < new Date(voucher.valid_from)) {
+    return gagal('Voucher belum berlaku.', 'VOUCHER_NOT_STARTED');
+  }
+  if (voucher.valid_until && new Date() > new Date(voucher.valid_until)) {
+    return gagal('Voucher sudah expired.', 'VOUCHER_EXPIRED');
+  }
+
+  let final_amount = original_amount;
+  if (voucher.discount_type === 'full')    final_amount = 0;
+  if (voucher.discount_type === 'percent') final_amount = Math.round(original_amount * (1 - voucher.discount_value / 100));
+  if (voucher.discount_type === 'fixed')   final_amount = Math.max(0, original_amount - voucher.discount_value);
+
+  return { voucher, final_amount };
+}
+
+// Increment pemakaian voucher hanya setelah sesi benar-benar tersimpan.
+async function catatPemakaianVoucher(voucher) {
+  await supabase
+    .from('vouchers')
+    .update({ used_count: (voucher.used_count ?? 0) + 1 })
+    .eq('id', voucher.id);
+}
 
 // POST /api/photobooth/session/start  (dipanggil startSession() Flutter)
 //
@@ -19,6 +76,7 @@ router.post('/start', validateDevice, async (req, res) => {
     transaction_type = 'session',
     extra_print_count = 0,
     code,
+    frame_id,
   } = req.body;
   const { id: device_id, client_id } = req.device;
 
@@ -29,11 +87,7 @@ router.post('/start', validateDevice, async (req, res) => {
   try {
     const settings = await resolveSettings(client_id, device_id);
 
-    const allowedMethods = Array.isArray(settings.payment_methods_enabled)
-      ? settings.payment_methods_enabled
-      : ['qris', 'voucher'];
-
-    if (!allowedMethods.includes(payment_method)) {
+    if (!metodeDiizinkan(settings).includes(payment_method)) {
       return res.status(400).json({
         success: false,
         message: 'Metode pembayaran tidak diaktifkan untuk unit ini.',
@@ -43,6 +97,7 @@ router.post('/start', validateDevice, async (req, res) => {
 
     // ── Hitung harga dasar dari setting ──
     let original_amount;
+    let frameSah = null;
     if (transaction_type === 'extra_print') {
       if (!settings.extra_print_enabled) {
         return res.status(400).json({ success: false, message: 'Cetak tambahan tidak diaktifkan.', code: 'EXTRA_PRINT_DISABLED' });
@@ -53,7 +108,17 @@ router.post('/start', validateDevice, async (req, res) => {
       }
       original_amount = qty * Number(settings.extra_print_price ?? 0);
     } else {
-      original_amount = Number(settings.session_price ?? 0);
+      // App baru mengirim frame yang diketuk pelanggan; harga kategorinya
+      // menimpa session_price. App lama tidak mengirimnya — harganya tetap
+      // disamakan nanti di attach-frame dan /payment/generate.
+      let info = { ada: false, harga: null };
+      try {
+        info = await hargaKategoriFrame(client_id, frame_id);
+      } catch (e) {
+        console.error('[Session] Harga frame gagal dibaca, pakai harga setelan:', e.message);
+      }
+      if (info.ada) frameSah = frame_id;
+      original_amount = hargaSesi(settings, info.harga);
     }
 
     let final_amount = original_amount;
@@ -62,40 +127,12 @@ router.post('/start', validateDevice, async (req, res) => {
 
     // ── Voucher ──
     if (payment_method === 'voucher') {
-      if (!settings.voucher_enabled) {
-        return res.status(400).json({ success: false, message: 'Voucher tidak diaktifkan untuk unit ini.', code: 'VOUCHER_DISABLED' });
-      }
-      if (!code) {
-        return res.status(400).json({ success: false, message: 'Kode voucher wajib diisi.', code: 'MISSING_VOUCHER_CODE' });
-      }
+      const hasil = await periksaVoucher({ settings, client_id, code, original_amount });
+      if (hasil.gagal) return res.status(400).json(hasil.gagal);
 
-      const { data: voucher, error: vErr } = await supabase
-        .from('vouchers')
-        .select('*')
-        .eq('code', code)
-        .eq('client_id', client_id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (vErr || !voucher) {
-        return res.status(400).json({ success: false, message: 'Kode voucher tidak valid.', code: 'VOUCHER_INVALID' });
-      }
-      if (voucher.max_uses && voucher.used_count >= voucher.max_uses) {
-        return res.status(400).json({ success: false, message: 'Voucher sudah habis digunakan.', code: 'VOUCHER_EXHAUSTED' });
-      }
-      if (voucher.valid_from && new Date() < new Date(voucher.valid_from)) {
-        return res.status(400).json({ success: false, message: 'Voucher belum berlaku.', code: 'VOUCHER_NOT_STARTED' });
-      }
-      if (voucher.valid_until && new Date() > new Date(voucher.valid_until)) {
-        return res.status(400).json({ success: false, message: 'Voucher sudah expired.', code: 'VOUCHER_EXPIRED' });
-      }
-
-      if (voucher.discount_type === 'full')    final_amount = 0;
-      if (voucher.discount_type === 'percent') final_amount = Math.round(original_amount * (1 - voucher.discount_value / 100));
-      if (voucher.discount_type === 'fixed')   final_amount = Math.max(0, original_amount - voucher.discount_value);
-
-      voucher_id = voucher.id;
-      voucher_row = voucher;
+      final_amount = hasil.final_amount;
+      voucher_id = hasil.voucher.id;
+      voucher_row = hasil.voucher;
     }
 
     const isFree = payment_method === 'voucher' || payment_method === 'bypass' || final_amount <= 0;
@@ -113,6 +150,7 @@ router.post('/start', validateDevice, async (req, res) => {
         original_amount,
         payment_status: isFree ? 'free' : 'pending',
         paid_at: isFree ? new Date().toISOString() : null,
+        ...(frameSah ? { frame_id: frameSah, selected_frame_id: frameSah, frame_locked_at: new Date().toISOString() } : {}),
       })
       .select()
       .single();
@@ -122,12 +160,8 @@ router.post('/start', validateDevice, async (req, res) => {
       return res.status(500).json({ success: false, message: 'Gagal membuat sesi.', code: 'SESSION_INSERT_FAILED' });
     }
 
-    // Increment pemakaian voucher hanya setelah sesi benar-benar tersimpan.
     if (voucher_row) {
-      await supabase
-        .from('vouchers')
-        .update({ used_count: (voucher_row.used_count ?? 0) + 1 })
-        .eq('id', voucher_row.id);
+      await catatPemakaianVoucher(voucher_row);
     }
 
     return res.status(201).json({
@@ -174,7 +208,7 @@ router.patch('/attach-frame', validateDevice, async (req, res) => {
       })
       .eq('transaction_code', session_uuid)
       .eq('client_id', client_id)
-      .select('id')
+      .select(KOLOM_SESI)
       .maybeSingle();
 
     if (error) {
@@ -185,7 +219,11 @@ router.patch('/attach-frame', validateDevice, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
     }
 
-    return res.json({ success: true, session_id: updated.id, frame_id });
+    // Pelanggan bisa kembali dari kamera dan memilih frame kategori lain di
+    // sesi yang sama; harganya ikut berpindah selama sesi belum lunas.
+    const sesi = await sesuaikanHargaSesi(updated);
+
+    return res.json({ success: true, session_id: updated.id, frame_id, amount: Number(sesi.amount) });
   } catch (e) {
     console.error('[Session] Attach frame exception:', e);
     return res.status(500).json({ success: false, message: 'Server error.' });
@@ -340,11 +378,15 @@ router.patch('/print-status', validateDevice, async (req, res) => {
 // tertutup. Pada audit 2026-08-28, 74 dari 109 sesi pending berasal dari sini
 // dan tidak punya jejak apa pun di DOKU.
 //
-// Endpoint ini TIDAK pernah memutuskan sendiri bahwa sesi batal — DOKU ditanya
-// lebih dulu, supaya pembayaran yang webhook-nya belum sampai tidak ikut
-// ditutup. Kalau DOKU tidak bisa dihubungi, sesi sengaja DIBIARKAN 'pending':
-// lebih baik satu baris menggantung daripada menandai batal sesuatu yang
-// ternyata sudah dibayar.
+// Sejak 2026-09-14 app memanggilnya dari PhotoProvider.reset() — yaitu saat
+// PELANGGAN pergi (timer habis / selesai), bukan per percobaan bayar: satu
+// sesi kini bisa punya banyak invoice DOKU (lihat /payment/generate).
+//
+// Endpoint ini TIDAK pernah memutuskan sendiri bahwa sesi batal — semua
+// invoice sesi ditanyakan ke DOKU lebih dulu (utils/pembayaran.js), supaya
+// pembayaran yang webhook-nya belum sampai tidak ikut ditutup. Sesi sengaja
+// DIBIARKAN 'pending' kalau DOKU tidak bisa dihubungi atau order-nya masih
+// bisa dibayar; penyapu sesi (workers/penyapu-sesi.js) mencobanya lagi nanti.
 router.post('/abandon', validateDevice, async (req, res) => {
   const { transaction_code } = req.body;
   const { id: device_id } = req.device;
@@ -355,12 +397,13 @@ router.post('/abandon', validateDevice, async (req, res) => {
 
   try {
     // Dibatasi ke perangkat pemilik sesi — satu unit tidak boleh menutup sesi unit lain.
-    const { data: session } = await supabase
+    const { data: session, error } = await supabase
       .from('sessions')
-      .select('id, payment_status, clients(doku_client_id, doku_secret_key)')
+      .select(KOLOM_SESI)
       .eq('transaction_code', transaction_code)
       .eq('device_id', device_id)
       .maybeSingle();
+    if (error) throw new Error(error.message);
 
     if (!session) {
       return res.status(404).json({ success: false, message: 'Sesi tidak ditemukan.', code: 'SESSION_NOT_FOUND' });
@@ -371,57 +414,111 @@ router.post('/abandon', validateDevice, async (req, res) => {
       return res.status(200).json({ success: true, status: session.payment_status, changed: false });
     }
 
-    const tutup = async (status, extra = {}) => {
-      await supabase.from('sessions').update({ payment_status: status, ...extra }).eq('id', session.id);
-      return res.status(200).json({ success: true, status, changed: true });
-    };
-
-    const { doku_client_id, doku_secret_key } = session.clients || {};
-
-    // Tanpa kredensial DOKU tidak ada order yang mungkin dibayar.
-    if (!doku_client_id || !doku_secret_key) {
-      console.log('[Session] Abandon', transaction_code, '- klien tanpa kredensial DOKU, ditutup sebagai expired.');
-      return tutup('expired');
+    const hasil = await rekonsiliasiSesi(session, { tutup: true });
+    if (hasil.berubah) {
+      console.log('[Session] Abandon', transaction_code, '→', hasil.status);
+    } else {
+      console.log('[Session] Abandon', transaction_code, '- dibiarkan', hasil.status,
+        hasil.takTerjawab ? '(DOKU tidak menjawab)' : '(order masih bisa dibayar)');
     }
-
-    const targetPath = `/orders/v1/status/${transaction_code}`;
-    const requestId = uuidv4();
-    const timestamp = getTimestamp();
-
-    try {
-      const dokuResponse = await axios.get(`${DOKU_BASE_URL}${targetPath}`, {
-        headers: {
-          'Client-Id': doku_client_id,
-          'Request-Id': requestId,
-          'Request-Timestamp': timestamp,
-          'Signature': generateSignatureGet(doku_client_id, doku_secret_key, requestId, timestamp, targetPath),
-        },
-        timeout: 10000,
-      });
-
-      if (dokuResponse.data?.transaction?.status === 'SUCCESS') {
-        console.log('[Session] Abandon dibatalkan —', transaction_code, 'ternyata SUDAH DIBAYAR.');
-        return tutup('paid', { paid_at: new Date().toISOString() });
-      }
-
-      console.log('[Session] Abandon', transaction_code, '- order ada tapi belum dibayar, ditutup sebagai expired.');
-      return tutup('expired');
-
-    } catch (error) {
-      // 404 = order tidak pernah dibuat di DOKU. Justru kasus yang paling sering:
-      // /payment/generate gagal atau tidak pernah dipanggil. Aman ditutup.
-      if (error?.response?.status === 404) {
-        console.log('[Session] Abandon', transaction_code, '- tidak ada order di DOKU, ditutup sebagai expired.');
-        return tutup('expired');
-      }
-
-      // Selain itu (jaringan/5xx): tidak bisa membuktikan sesi belum dibayar.
-      console.error('[Session] Abandon', transaction_code, '- DOKU tidak bisa dihubungi, sesi dibiarkan pending:', error?.response?.data || error.message);
-      return res.status(200).json({ success: true, status: 'pending', changed: false });
-    }
+    return res.status(200).json({ success: true, status: hasil.status, changed: hasil.berubah });
 
   } catch (e) {
     console.error('[Session] Abandon error:', e);
+    return res.status(500).json({ success: false, message: 'Server error.', code: 'SERVER_ERROR' });
+  }
+});
+
+// POST /api/photobooth/session/redeem-voucher  (dipanggil redeemVoucher() Flutter)
+//
+// Memakai voucher untuk sesi yang SUDAH ada — sesi yang dibuat saat pelanggan
+// memilih frame. Dulu voucher lewat /start yang selalu menyisipkan baris baru,
+// sehingga tiap pelanggan voucher meninggalkan baris frame 'pending'.
+router.post('/redeem-voucher', validateDevice, async (req, res) => {
+  const { transaction_code, code } = req.body;
+  const { id: device_id, client_id } = req.device;
+
+  if (!transaction_code) {
+    return res.status(400).json({ success: false, message: 'transaction_code wajib diisi.', code: 'MISSING_TRANSACTION_CODE' });
+  }
+
+  try {
+    const { data: session, error } = await supabase
+      .from('sessions')
+      .select(KOLOM_SESI)
+      .eq('transaction_code', transaction_code)
+      .eq('device_id', device_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+
+    if (!session) {
+      return res.status(404).json({ success: false, message: 'Sesi tidak ditemukan.', code: 'SESSION_NOT_FOUND' });
+    }
+
+    const sudahSelesai = (status) => status === 'paid' || status === 'free';
+    const tanpaVoucher = (status) =>
+      res.status(200).json({ success: true, payment_status: status, voucher_used: false });
+
+    if (sudahSelesai(session.payment_status)) return tanpaVoucher(session.payment_status);
+
+    const settings = await resolveSettings(client_id, device_id);
+    if (!metodeDiizinkan(settings).includes('voucher')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Metode pembayaran tidak diaktifkan untuk unit ini.',
+        code: 'UNSUPPORTED_PAYMENT_METHOD',
+      });
+    }
+
+    // QR yang sempat dipindai sebelum pelanggan beralih ke voucher bisa saja
+    // sudah dibayar — jangan sampai kuota voucher ikut terpakai.
+    const cek = await rekonsiliasiSesi(session);
+    if (sudahSelesai(cek.status)) return tanpaVoucher(cek.status);
+
+    // Diskon voucher dihitung dari harga kategori frame yang terakhir dipilih.
+    const sesiBerharga = await sesuaikanHargaSesi(session);
+    const original_amount = Number(sesiBerharga.original_amount ?? sesiBerharga.amount ?? 0);
+    const hasil = await periksaVoucher({ settings, client_id, code, original_amount });
+    if (hasil.gagal) return res.status(400).json(hasil.gagal);
+
+    // Bersyarat pada status lama: kalau polling/webhook keburu menandai lunas,
+    // voucher tidak dipakai.
+    const { data: diubah, error: uErr } = await supabase
+      .from('sessions')
+      .update({
+        payment_method: 'voucher',
+        voucher_id: hasil.voucher.id,
+        amount: hasil.final_amount,
+        payment_status: 'free',
+        paid_at: new Date().toISOString(),
+      })
+      .eq('id', session.id)
+      .in('payment_status', STATUS_BELUM_LUNAS)
+      .select('id')
+      .maybeSingle();
+    if (uErr) throw new Error(uErr.message);
+
+    if (!diubah) {
+      const { data: kini } = await supabase
+        .from('sessions')
+        .select('payment_status')
+        .eq('id', session.id)
+        .maybeSingle();
+      return tanpaVoucher(kini?.payment_status ?? session.payment_status);
+    }
+
+    await catatPemakaianVoucher(hasil.voucher);
+
+    return res.status(200).json({
+      success: true,
+      session_id: session.id,
+      amount: hasil.final_amount,
+      original_amount,
+      payment_status: 'free',
+      voucher_used: true,
+    });
+  } catch (e) {
+    console.error('[Session] Redeem voucher error:', e);
     return res.status(500).json({ success: false, message: 'Server error.', code: 'SERVER_ERROR' });
   }
 });

@@ -29,7 +29,12 @@ type FrameCategory = {
   name: string
   sort_order: number
   is_active: boolean
+  // Harga sesi untuk frame di kategori ini; null = ikut harga setelan.
+  // Menimpa harga per unit (device_settings). Server yang menagih.
+  session_price: number | null
 }
+
+const rupiah = (n: number) => `Rp${n.toLocaleString('id-ID')}`
 
 // Kertas cetak yang dikenali app (PrintService._paperInches) DAN driver
 // printer (tools/setup-printer.ps1 -PaperSize). Menambah nilai di sini tanpa
@@ -73,8 +78,8 @@ async function compressImage(file: File, maxWidth: number, quality: number): Pro
 }
 
 export default function FramesManager({
-  initialFrames, initialCategories, clientId,
-}: { initialFrames: FrameItem[], initialCategories: FrameCategory[], clientId: string }) {
+  initialFrames, initialCategories, clientId, hargaDefault,
+}: { initialFrames: FrameItem[], initialCategories: FrameCategory[], clientId: string, hargaDefault: number | null }) {
   const supabase = createClient()
 
   const [frames, setFrames]               = useState<FrameItem[]>(initialFrames)
@@ -222,6 +227,25 @@ export default function FramesManager({
     const { error } = await supabase.from('frame_categories').update({ name: bersih }).eq('id', id)
     if (error) { setError(error.message); setCategories(prev => [...prev]) }
     else setCategories(prev => prev.map(c => c.id===id ? {...c, name:bersih} : c))
+    setCatBusy(null)
+  }
+
+  // Kosong = kategori ikut harga setelan. Tersimpan saat fokus lepas, sama
+  // seperti ganti nama.
+  const handleHargaCategory = async (id: string, teks: string) => {
+    const lama = categories.find(c => c.id===id)
+    if (!lama) return
+    const bersih = teks.replace(/[^\d]/g, '')
+    const nilai = bersih === '' ? null : Number(bersih)
+    if (nilai === lama.session_price) return
+    if (nilai !== null && nilai <= 0) { setError('Harga harus lebih dari 0, atau kosongkan untuk ikut harga default.'); return }
+    setCatBusy(id); setError('')
+    const { error } = await supabase.from('frame_categories').update({ session_price: nilai }).eq('id', id)
+    if (error) { setError('Gagal menyimpan harga: ' + error.message); setCategories(prev => [...prev]) }
+    else {
+      setCategories(prev => prev.map(c => c.id===id ? {...c, session_price:nilai} : c))
+      showSuccess(nilai === null ? `"${lama.name}" kembali ke harga default.` : `Harga "${lama.name}" jadi ${rupiah(nilai)}.`)
+    }
     setCatBusy(null)
   }
 
@@ -417,7 +441,7 @@ export default function FramesManager({
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
             {kategoriUrut.map((c, i) => (
               <div key={c.id}
-                style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(212,43,34,0.05)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:13, padding:'10px 12px', opacity:c.is_active?1:.55 }}>
+                style={{ display:'flex', alignItems:'center', flexWrap:'wrap', gap:10, background:'rgba(212,43,34,0.05)', border:'1px solid rgba(212,43,34,0.07)', borderRadius:13, padding:'10px 12px', opacity:c.is_active?1:.55 }}>
 
                 <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
                   <button onClick={()=>handleMoveCategory(c.id,-1)} disabled={i===0||catBusy===c.id} aria-label="Naikkan"
@@ -436,6 +460,18 @@ export default function FramesManager({
                   onKeyDown={e=>{ if(e.key==='Enter') (e.target as HTMLInputElement).blur() }}
                   style={{...inputCls, flex:1, padding:'8px 12px'}}
                   onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}/>
+
+                {/* Harga sesi kategori. Kosong = ikut harga default. */}
+                <div style={{ display:'flex', alignItems:'center', gap:5, width:150, flexShrink:0 }}>
+                  <span style={{ color:'rgba(122,98,89,0.85)', fontSize:12.5 }}>Rp</span>
+                  <input inputMode="numeric" aria-label={`Harga ${c.name}`}
+                    defaultValue={c.session_price ?? ''} key={`${c.id}-harga-${c.session_price}`}
+                    placeholder={hargaDefault ? `${hargaDefault.toLocaleString('id-ID')} (default)` : 'Default'}
+                    onBlur={e=>handleHargaCategory(c.id, e.target.value)}
+                    onKeyDown={e=>{ if(e.key==='Enter') (e.target as HTMLInputElement).blur() }}
+                    style={{...inputCls, padding:'8px 10px'}}
+                    onFocus={e=>e.target.style.borderColor='rgba(212,43,34,.6)'}/>
+                </div>
 
                 <span style={{ background:'rgba(212,43,34,0.05)', color:'rgba(122,98,89,0.85)', border:'1px solid rgba(212,43,34,0.06)', borderRadius:6, padding:'4px 9px', fontSize:12, whiteSpace:'nowrap' }}>
                   {jumlahFrame(c.id)} frame
@@ -459,6 +495,9 @@ export default function FramesManager({
         <p style={{ color:'rgba(158,136,128,0.9)', fontSize:12.5, marginTop:18, lineHeight:1.6 }}>
           Kategori yang dimatikan ikut menyembunyikan frame di dalamnya dari kios dan HP pelanggan
           - berguna saat kertas untuk kategori itu sedang tidak terpasang.
+          {' '}Harga yang diisi berlaku untuk semua frame di kategori itu dan menimpa harga per unit;
+          kosongkan untuk ikut harga default{hargaDefault ? ` (${rupiah(hargaDefault)})` : ''}. Frame tanpa kategori selalu memakai harga default.
+          Harga tampil di chip kios hanya kalau harganya berbeda-beda.
           {tanpaKategori > 0 && ` Saat ini ${tanpaKategori} frame belum dikategorikan dan muncul di chip "Lainnya".`}
         </p>
       </div>
