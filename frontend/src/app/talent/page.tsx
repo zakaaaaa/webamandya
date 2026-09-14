@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 
 import { DASH_COOKIE, sesiSah } from '@/lib/dash-auth'
 import TalentClient from './TalentClient'
+import { awalBulanJakarta, awalHariJakarta } from '@/lib/waktu'
 
 export const metadata: Metadata = {
   title: 'Talent Pool - Pabrik Kenangan',
@@ -15,27 +16,7 @@ export const metadata: Metadata = {
 // dari cache prerender.
 export const dynamic = 'force-dynamic'
 
-/*
- * BATAS HARI MEMAKAI WAKTU JAKARTA, BUKAN UTC.
- *
- * Server Vercel berjalan di UTC. `new Date().setHours(0,0,0,0)` di sana berarti
- * pukul 07.00 WIB — jadi "pendapatan hari ini" akan kosong sepanjang pagi dan
- * pendapatan sebelum pukul 07.00 terhitung ke hari sebelumnya. Untuk photobooth
- * yang justru ramai malam hari, selisih itu mengubah angkanya secara mencolok.
- */
-const WIB_OFFSET_MS = 7 * 60 * 60 * 1000
-
-function awalHariJakarta(sekarang = new Date()): Date {
-  const wib = new Date(sekarang.getTime() + WIB_OFFSET_MS)
-  const utcTengahMalamWib = Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate())
-  return new Date(utcTengahMalamWib - WIB_OFFSET_MS)
-}
-
-function awalBulanJakarta(sekarang = new Date()): Date {
-  const wib = new Date(sekarang.getTime() + WIB_OFFSET_MS)
-  const utcAwalBulanWib = Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), 1)
-  return new Date(utcAwalBulanWib - WIB_OFFSET_MS)
-}
+// Batas hari & bulan memakai WIB, bukan UTC server Vercel — lihat lib/waktu.
 
 function jumlahkan(rows: { amount: number | string | null }[] | null): number {
   return rows?.reduce((s, r) => s + (Number(r.amount) || 0), 0) ?? 0
@@ -72,7 +53,10 @@ export default async function TalentPage() {
       .order('created_at', { ascending: false }),
     supabase.from('sessions').select('amount').eq('payment_status', 'paid').gte('created_at', hariIni),
     supabase.from('sessions').select('amount').eq('payment_status', 'paid').gte('created_at', bulanIni),
-    supabase.from('sessions').select('*', { count: 'exact', head: true }).gte('created_at', hariIni),
+    // Sama dengan dasbor: hanya sesi lunas/gratis, tanpa baris Tambah Cetakan.
+    supabase.from('sessions').select('*', { count: 'exact', head: true }).gte('created_at', hariIni)
+      .in('payment_status', ['paid', 'free'])
+      .or('transaction_type.is.null,transaction_type.neq.extra_print'),
   ])
 
   return (

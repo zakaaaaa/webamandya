@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import TransactionsClient from './TransactionsClient'
+import { rentangHariJakarta } from '@/lib/waktu'
 
 type SP = {
   page?: string; status?: string; method?: string; device?: string
@@ -42,9 +43,10 @@ export default async function TransactionsPage({
     search: p.search ?? '',
   }
 
-  // `to` mencakup seluruh hari itu, bukan tengah malam awal hari.
-  const fromISO = filters.from ? new Date(`${filters.from}T00:00:00`).toISOString() : ''
-  const toISO   = filters.to   ? new Date(`${filters.to}T23:59:59.999`).toISOString() : ''
+  // Tanggal filter adalah hari kalender WIB; `to` mencakup seluruh hari itu.
+  // Tanpa +07:00 server Vercel (UTC) menggeser rentangnya 7 jam.
+  const fromISO = filters.from ? rentangHariJakarta(filters.from).dari   : ''
+  const toISO   = filters.to   ? rentangHariJakarta(filters.to).sampai   : ''
 
   // Semua filter KECUALI status. Status dipisah supaya kartu statistik bisa
   // memecah jumlah per status di dalam rentang filter yang sama.

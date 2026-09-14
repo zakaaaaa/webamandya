@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { formatWaktu } from '@/lib/waktu'
 import {
   Printer, Droplets, Layers, AlertTriangle, Loader2, X, Check, Gauge,
 } from 'lucide-react'
@@ -70,7 +71,7 @@ const INK_META: Record<string, { label: string; color: string }> = {
 
 function fmtDate(v: string | null) {
   if (!v) return '—'
-  return new Date(v).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
+  return formatWaktu(v, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 function Bar({ pct, color, muted }: { pct: number; color: string; muted?: boolean }) {

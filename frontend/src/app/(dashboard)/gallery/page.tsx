@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import GalleryClient from './GalleryClient'
+import { rentangHariJakarta } from '@/lib/waktu'
 
 export default async function GalleryPage({
   searchParams,
@@ -48,9 +49,8 @@ export default async function GalleryPage({
   if (!isSuperAdmin)  q = q.eq('client_id', clientId)
   if (devFilter)      q = q.eq('device_id', devFilter)
   if (dateFilter) {
-    const start = new Date(dateFilter); start.setHours(0,0,0,0)
-    const end   = new Date(dateFilter); end.setHours(23,59,59,999)
-    q = q.gte('created_at', start.toISOString()).lte('created_at', end.toISOString())
+    const { dari, sampai } = rentangHariJakarta(dateFilter)
+    q = q.gte('created_at', dari).lte('created_at', sampai)
   }
   if (search) q = q.ilike('transaction_code', `%${search}%`)
   q = q.range(offset, offset + perPage - 1)

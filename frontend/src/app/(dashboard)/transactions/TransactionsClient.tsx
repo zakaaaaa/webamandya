@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState, useTransition } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { formatWaktu, tanggalJakarta } from '@/lib/waktu'
 import {
   Receipt, Search, X, ChevronLeft, ChevronRight, Download, RefreshCw,
   TrendingUp, CheckCircle2, Clock, XCircle, ExternalLink, FilterX,
@@ -61,10 +62,9 @@ const METHOD_OPTIONS = [
 ]
 
 const rupiah = (n: number) => `Rp ${Number(n || 0).toLocaleString('id-ID')}`
-const ymd = (d: Date) => {
-  const p = (x: number) => String(x).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
-}
+// Hari kalender WIB, sama dengan cara server menafsirkan filter from/to.
+const ymd = (d: Date) => tanggalJakarta(d)
+const mundurHari = (n: number) => new Date(Date.now() - n * 86_400_000)
 
 export default function TransactionsClient({
   sessions, devices, clients, isSuperAdmin, filters, currentPage, perPage, filteredCount, stats,
@@ -101,18 +101,14 @@ export default function TransactionsClient({
   // Rentang cepat. `to` selalu hari ini supaya rentangnya tidak pernah terbalik.
   const quickRange = (days: number | null) => {
     if (days === null) { pushFilter({ from: '', to: '' }); return }
-    const to   = new Date()
-    const from = new Date()
-    from.setDate(from.getDate() - (days - 1))
-    pushFilter({ from: ymd(from), to: ymd(to) })
+    pushFilter({ from: ymd(mundurHari(days - 1)), to: ymd(new Date()) })
   }
 
   const activeQuick = useMemo(() => {
     if (!filters.from && !filters.to) return 'all'
     if (filters.to !== ymd(new Date())) return ''
     for (const d of [1, 7, 30]) {
-      const f = new Date(); f.setDate(f.getDate() - (d - 1))
-      if (filters.from === ymd(f)) return String(d)
+      if (filters.from === ymd(mundurHari(d - 1))) return String(d)
     }
     return ''
   }, [filters.from, filters.to])
@@ -122,7 +118,7 @@ export default function TransactionsClient({
       .filter(Boolean).length
 
   const fmt = (d: string | null) =>
-    d ? new Date(d).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+    d ? formatWaktu(d) : '—'
 
   // ── Tanya ulang status ke DOKU lewat backend ──
   // Backend membaca order.status, bukan hanya transaction.status, sehingga sesi

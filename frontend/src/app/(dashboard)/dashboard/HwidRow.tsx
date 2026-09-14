@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Copy, Check } from 'lucide-react'
+import { formatWaktu } from '@/lib/waktu'
 
 export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
   hwid: string
@@ -18,8 +19,7 @@ export function HwidRow({ hwid, lastSeen, firstSeen, status, deviceName }: {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })
+  const formatDate = (iso: string) => formatWaktu(iso)
 
   const isRegistered = status !== 'Belum Terdaftar'
   const isActive = status === 'Aktif'

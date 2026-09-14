@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useTransition } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { formatWaktu } from '@/lib/waktu'
 import {
   Images, Download, Search, Filter, X, ChevronLeft, ChevronRight,
   Calendar, Monitor, ZoomIn, ExternalLink, CheckSquare, Square,
@@ -115,8 +116,8 @@ export default function GalleryClient({
     else setSelected(new Set(sessions.map(s => s.id)))
   }
 
-  const formatDate      = (d: string) => new Date(d).toLocaleString('id-ID', { dateStyle:'medium', timeStyle:'short' })
-  const formatDateShort = (d: string) => new Date(d).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
+  const formatDate      = (d: string) => formatWaktu(d, { dateStyle:'medium', timeStyle:'short' })
+  const formatDateShort = (d: string) => formatWaktu(d, { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })
 
   const activeFilterCount = [filters.device, filters.date, filters.search].filter(Boolean).length
 

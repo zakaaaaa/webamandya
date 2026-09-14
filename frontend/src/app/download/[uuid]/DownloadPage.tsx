@@ -666,7 +666,7 @@ export default function DownloadPage({
   }
 
   const formatDate = (d:string) =>
-    new Date(d).toLocaleString('id-ID', { dateStyle:'long', timeStyle:'short' })
+    new Date(d).toLocaleString('id-ID', { dateStyle:'long', timeStyle:'short', timeZone:'Asia/Jakarta' })
 
   const busy = (key:string) => downloading === key
 

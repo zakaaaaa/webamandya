@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import VouchersClient from './VouchersClient'
+import { awalHariJakarta } from '@/lib/waktu'
 
 export default async function VouchersPage({
   searchParams,
@@ -42,7 +43,7 @@ export default async function VouchersPage({
     supabase.from('vouchers').select('*', { count:'exact', head:true }).eq('client_id', clientId).eq('is_active', true),
     supabase.from('vouchers').select('*', { count:'exact', head:true }).eq('client_id', clientId).gt('used_count', 0),
     supabase.from('sessions').select('id').eq('client_id', clientId).eq('payment_method', 'voucher')
-      .gte('created_at', new Date(new Date().setHours(0,0,0,0)).toISOString()),
+      .gte('created_at', awalHariJakarta().toISOString()),
   ])
 
   return (

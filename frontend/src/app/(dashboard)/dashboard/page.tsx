@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Users, Monitor, Receipt, TrendingUp, Shield, Activity } from 'lucide-react'
 import { HwidRow } from './HwidRow'
+import { awalHariJakarta, formatWaktu } from '@/lib/waktu'
 
 const superAdminNav = [
   { href: '/clients',      label: 'Clients',   icon: Users    },
@@ -28,7 +29,15 @@ export default async function DashboardPage() {
     .from('admin_users').select('role,client_id,full_name').eq('id', user.id).single()
 
   const isSuperAdmin = adminUser?.role === 'super_admin'
-  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const hariIni = awalHariJakarta().toISOString()
+
+  // "Sesi" = pelanggan yang benar-benar jadi: lunas atau voucher gratis.
+  // Baris expired/pending (foto diambil lalu batal bayar, QR kedaluwarsa) dan
+  // baris "Tambah Cetakan" (extra_print, menumpang pada sesi induknya) bukan
+  // sesi baru — dulu semuanya ikut dihitung sehingga 3 pelanggan tertulis 10.
+  const sesiJadi = (q: any) =>
+    q.in('payment_status', ['paid', 'free'])
+     .or('transaction_type.is.null,transaction_type.neq.extra_print')
 
   // ── SUPER ADMIN STATS ──
   let stats: any[] = []
@@ -45,8 +54,9 @@ export default async function DashboardPage() {
       supabase.from('clients').select('*', { count: 'exact', head: true }),
       supabase.from('devices').select('*', { count: 'exact', head: true }),
       supabase.from('devices').select('*', { count: 'exact', head: true }).eq('is_active', true),
-      supabase.from('sessions').select('*', { count: 'exact', head: true }).gte('created_at', today.toISOString()),
-      supabase.from('sessions').select('amount').eq('payment_status', 'paid').gte('created_at', today.toISOString()),
+      sesiJadi(supabase.from('sessions').select('*', { count: 'exact', head: true }).gte('created_at', hariIni)),
+      // Pendapatan tetap memasukkan Tambah Cetakan — uangnya nyata.
+      supabase.from('sessions').select('amount').eq('payment_status', 'paid').gte('created_at', hariIni),
       supabase.from('admin_users').select('*', { count: 'exact', head: true }).eq('role', 'admin'),
     ])
 
@@ -69,8 +79,8 @@ export default async function DashboardPage() {
       { count: activeVouchers },
       { count: activeDevices },
     ] = await Promise.all([
-      supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('client_id', cid).gte('created_at', today.toISOString()),
-      supabase.from('sessions').select('amount').eq('client_id', cid).eq('payment_status', 'paid').gte('created_at', today.toISOString()),
+      sesiJadi(supabase.from('sessions').select('*', { count: 'exact', head: true }).eq('client_id', cid).gte('created_at', hariIni)),
+      supabase.from('sessions').select('amount').eq('client_id', cid).eq('payment_status', 'paid').gte('created_at', hariIni),
       supabase.from('vouchers').select('*', { count: 'exact', head: true }).eq('client_id', cid).eq('is_active', true),
       supabase.from('devices').select('*', { count: 'exact', head: true }).eq('client_id', cid).eq('is_active', true),
     ])
@@ -427,7 +437,7 @@ export default async function DashboardPage() {
                           Rp {Number(s.amount).toLocaleString('id-ID')}
                         </td>
                         <td style={{ padding: '14px 20px', color: '#9E8880', fontSize: '12px', whiteSpace: 'nowrap' }}>
-                          {new Date(s.created_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}
+                          {formatWaktu(s.created_at)}
                         </td>
                       </tr>
                     )
