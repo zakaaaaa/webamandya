@@ -1,16 +1,12 @@
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { redirect } from 'next/navigation'
+import { ambilSesiAdmin } from '@/lib/admin-session'
 import DevicesManager from './DevicesManager'
 import ConsumablesPanel from './ConsumablesPanel'
 import QueuePanel from './QueuePanel'
 
-export default async function DevicesPage() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+const kosong = { data: [] as never[] }
 
-  const { data: adminUser } = await supabase
-    .from('admin_users').select('role, client_id').eq('id', user.id).single()
+export default async function DevicesPage() {
+  const { supabase, adminUser } = await ambilSesiAdmin()
 
   const isSuperAdmin = adminUser?.role === 'super_admin'
 
@@ -24,27 +20,23 @@ export default async function DevicesPage() {
     devicesQuery = devicesQuery.eq('client_id', adminUser?.client_id)
   }
 
+  // Dropdown clients tidak bergantung pada daftar devices, jadi dimulai
+  // bersamaan dengannya (super admin only).
+  const clientsPromise = isSuperAdmin
+    ? Promise.resolve(supabase.from('clients').select('id, name').eq('is_active', true).order('name'))
+    : Promise.resolve(kosong)
+
   const { data: devices } = await devicesQuery
-
-  // Bahan habis pakai (kertas & tinta). Barisnya bisa belum ada untuk
-  // perangkat yang baru didaftarkan — backend membuatnya saat laporan pertama
-  // masuk, jadi di sini cukup ditampilkan yang sudah ada.
   const deviceIds = (devices ?? []).map(d => d.id)
-  const { data: consumables } = deviceIds.length
-    ? await supabase.from('device_consumables').select('*').in('device_id', deviceIds)
-    : { data: [] }
 
-  // Keadaan antrean per perangkat. Barisnya dibuat oleh migrasi, jadi
-  // perangkat yang didaftarkan setelahnya bisa belum punya — panel di bawah
-  // hanya menampilkan yang sudah ada.
-  const { data: queueStates } = deviceIds.length
-    ? await supabase.from('device_queue_state').select('*').in('device_id', deviceIds)
-    : { data: [] }
-
-  // Ambil clients untuk dropdown (super admin only)
-  const { data: clients } = isSuperAdmin
-    ? await supabase.from('clients').select('id, name').eq('is_active', true).order('name')
-    : { data: [] }
+  // Konsumabel dan antrean sama-sama hanya butuh deviceIds — dulu ditunggu
+  // satu per satu. Baris keduanya bisa belum ada untuk perangkat baru (dibuat
+  // backend saat laporan pertama / oleh migrasi), jadi yang kosong wajar.
+  const [{ data: consumables }, { data: queueStates }, { data: clients }] = await Promise.all([
+    deviceIds.length ? supabase.from('device_consumables').select('*').in('device_id', deviceIds) : kosong,
+    deviceIds.length ? supabase.from('device_queue_state').select('*').in('device_id', deviceIds) : kosong,
+    clientsPromise,
+  ])
 
   return (
     <>

@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { ambilSesiAdmin } from '@/lib/admin-session'
 import { redirect } from 'next/navigation'
 import VouchersClient from './VouchersClient'
 import { awalHariJakarta } from '@/lib/waktu'
@@ -8,16 +8,12 @@ export default async function VouchersPage({
 }: {
   searchParams: Promise<{ page?: string; status?: string; search?: string }>
 }) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: adminUser } = await supabase
-    .from('admin_users').select('role,client_id,full_name').eq('id', user.id).single()
+  const { supabase, adminUser } = await ambilSesiAdmin()
 
   if (adminUser?.role === 'super_admin') redirect('/dashboard')
 
-  const clientId = adminUser?.client_id
+  // Super admin sudah dialihkan di atas; admin klien selalu punya client_id.
+  const clientId = adminUser.client_id ?? ''
   const params       = await searchParams
   const page         = Math.max(1, parseInt(params.page ?? '1'))
   const perPage      = 20

@@ -1,5 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { redirect } from 'next/navigation'
+import { ambilSesiAdmin } from '@/lib/admin-session'
 import { Users, Monitor, Receipt, TrendingUp, Shield, Activity } from 'lucide-react'
 import { HwidRow } from './HwidRow'
 import { awalHariJakarta, formatWaktu } from '@/lib/waktu'
@@ -21,14 +20,28 @@ const statColors = [
 ]
 
 export default async function DashboardPage() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: adminUser } = await supabase
-    .from('admin_users').select('role,client_id,full_name').eq('id', user.id).single()
+  const { supabase, adminUser } = await ambilSesiAdmin()
 
   const isSuperAdmin = adminUser?.role === 'super_admin'
+
+  // Dimulai sekarang, ditunggu di bawah — dulu baru berjalan setelah kartu
+  // statistik selesai, sehingga halaman menunggu dua gelombang query berurutan.
+  const hwidPromise = isSuperAdmin
+    ? Promise.all([
+        supabase.from('unregistered_devices').select('hwid, last_seen_at, created_at').order('last_seen_at', { ascending: false }).limit(20),
+        supabase.from('devices').select('hwid, device_name, is_active, created_at, license_end').order('created_at', { ascending: false }),
+      ])
+    : null
+  const terbaruPromise = isSuperAdmin
+    ? null
+    : Promise.resolve(
+        supabase
+          .from('sessions')
+          .select('transaction_code,payment_method,payment_status,amount,created_at,devices(device_name)')
+          .eq('client_id', adminUser?.client_id)
+          .order('created_at', { ascending: false })
+          .limit(8)
+      )
   const hariIni = awalHariJakarta().toISOString()
 
   // "Sesi" = pelanggan yang benar-benar jadi: lunas atau voucher gratis.
@@ -95,14 +108,11 @@ export default async function DashboardPage() {
 
   // ── HWID DEBUG: Semua Perangkat (super admin only) ──
   let allDevicesList: any[] = []
-  if (isSuperAdmin) {
+  if (hwidPromise) {
     const [
       { data: unreg },
       { data: reg }
-    ] = await Promise.all([
-      supabase.from('unregistered_devices').select('hwid, last_seen_at, created_at').order('last_seen_at', { ascending: false }).limit(20),
-      supabase.from('devices').select('hwid, device_name, is_active, created_at, license_end').order('created_at', { ascending: false })
-    ])
+    ] = await hwidPromise
 
     const regMap = new Map()
     if (reg) {
@@ -139,13 +149,8 @@ export default async function DashboardPage() {
 
   // Recent sessions — hanya untuk ADMIN biasa
   let sessions: any[] = []
-  if (!isSuperAdmin) {
-    const { data } = await supabase
-      .from('sessions')
-      .select('transaction_code,payment_method,payment_status,amount,created_at,devices(device_name)')
-      .eq('client_id', adminUser?.client_id)
-      .order('created_at', { ascending: false })
-      .limit(8)
+  if (terbaruPromise) {
+    const { data } = await terbaruPromise
     sessions = data ?? []
   }
 

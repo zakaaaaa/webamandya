@@ -1,14 +1,9 @@
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { ambilSesiAdmin } from '@/lib/admin-session'
 import { redirect } from 'next/navigation'
 import ClientsManager from './ClientsManager'
 
 export default async function ClientsPage() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: adminUser } = await supabase
-    .from('admin_users').select('role').eq('id', user.id).single()
+  const { supabase, adminUser } = await ambilSesiAdmin()
 
   if (adminUser?.role !== 'super_admin') redirect('/dashboard')
 

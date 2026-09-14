@@ -1,5 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { redirect } from 'next/navigation'
+import { ambilSesiAdmin } from '@/lib/admin-session'
 import TransactionsClient from './TransactionsClient'
 import { rentangHariJakarta } from '@/lib/waktu'
 
@@ -15,16 +14,7 @@ export default async function TransactionsPage({
 }: {
   searchParams: Promise<SP>
 }) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: adminUser } = await supabase
-    .from('admin_users')
-    .select('role,client_id,full_name')
-    .eq('id', user.id)
-    .single()
-  if (!adminUser) redirect('/login')
+  const { supabase, adminUser } = await ambilSesiAdmin()
 
   const isSuperAdmin  = adminUser.role === 'super_admin'
   const scopeClientId = adminUser.client_id

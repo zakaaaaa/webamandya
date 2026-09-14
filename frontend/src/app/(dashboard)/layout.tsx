@@ -1,15 +1,8 @@
-import { redirect } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { ambilSesiAdmin } from '@/lib/admin-session'
 import Sidebar from '@/components/dashboard/Sidebar'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: adminUser } = await supabase
-    .from('admin_users').select('role, full_name, client_id').eq('id', user.id).single()
-  if (!adminUser) redirect('/login')
+  const { adminUser } = await ambilSesiAdmin()
 
   return (
     <>
