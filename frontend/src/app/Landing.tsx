@@ -202,7 +202,12 @@ export default function Landing() {
             </div>
 
             <div className="paket-cta">
-              <a className="btn btn-primary" href="#booking">Kunci tanggal untuk paket {terpilih.nm}</a>
+              <p className="sum" aria-live="polite">
+                <span>Paket dipilih</span>
+                <b>{terpilih.nm}</b>
+                <i>{terpilih.skema} &middot; {rupiah(terpilih.harga)}</i>
+              </p>
+              <a className="btn btn-primary" href="#booking">Cek tanggal untuk paket ini</a>
             </div>
           </div>
         </section>

@@ -333,17 +333,22 @@ p{margin:0}
 
 
 /* ══════════ Paket ══════════ */
-.pk-grup + .pk-grup{margin-top:34px}
+.pk-grup + .pk-grup{margin-top:40px}
+/* Label kelompok + garis tipis sampai tepi kanan, supaya dua baris kartu
+   terbaca sebagai dua kelompok tanpa perlu kotak pembungkus. */
 .pk-label{
-  font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);margin:0 0 14px;
+  display:flex;align-items:center;gap:14px;margin:0 0 16px;
+  font-family:'IBM Plex Mono',monospace;font-size:11.5px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);
 }
-.pakets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
+.pk-label::after{content:'';flex:1;height:1px;background:var(--line)}
+.pakets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch}
 .pakets[data-n="4"]{grid-template-columns:repeat(4,minmax(0,1fr))}
 .paket{
   position:relative;text-align:left;width:100%;
-  background:var(--surface);border:1.5px solid var(--line);border-radius:20px;
-  padding:26px 24px 24px;cursor:pointer;
+  display:flex;flex-direction:column;
+  background:var(--surface);border:1.5px solid var(--line);border-radius:18px;
+  padding:22px 22px 20px;cursor:pointer;
   box-shadow:var(--shadow-sm);
   transition:border-color .2s,box-shadow .2s,transform .2s;
 }
@@ -352,12 +357,15 @@ p{margin:0}
   border-color:var(--red);
   box-shadow:0 0 0 4px var(--red-wash),var(--shadow-md);
 }
-.paket .top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+.paket .top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px}
 .paket .nm{font-size:17px;font-weight:800;letter-spacing:-.02em}
 .paket .kode{
-  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.12em;
-  color:var(--ink-4);display:block;margin-top:3px;
+  display:inline-block;margin-top:9px;padding:3px 10px;border-radius:100px;
+  background:var(--red-wash);color:var(--ink-2);
+  font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.02em;
+  transition:background .2s,color .2s;
 }
+.paket[aria-checked="true"] .kode{background:var(--red-wash-2);color:var(--red-dark)}
 .paket .mark{
   width:20px;height:20px;border-radius:50%;flex:none;
   border:2px solid var(--line-2);display:grid;place-items:center;
@@ -370,19 +378,32 @@ p{margin:0}
 }
 .paket[aria-checked="true"] .mark::after{transform:scale(1)}
 
+/* margin-top:auto menurunkan harga ke dasar kartu, jadi harga sebaris antar
+   kartu walau nama paket patah baris. Satu ukuran untuk 3 & 4 kolom:
+   "Rp 1.980.000 / acara" di 22px masih muat di kartu 4 kolom terlebar. */
 .paket .harga{
+  margin-top:auto;padding-top:14px;border-top:1px dashed var(--hair);
+  display:flex;align-items:baseline;flex-wrap:wrap;column-gap:6px;
   font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;
-  font-size:25px;font-weight:600;letter-spacing:-.02em;color:var(--ink);
+  font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--ink);
 }
-.paket .harga small{font-size:12px;font-weight:400;color:var(--ink-4);letter-spacing:0;margin-left:6px}
-/* Kartu empat kolom lebih sempit: harga 25px + "/ acara" akan patah baris. */
-.pakets[data-n="4"] .harga{font-size:21px}
+.paket .harga small{font-size:12px;font-weight:400;color:var(--ink-4);letter-spacing:0}
 
 .paket-cta{
-  margin-top:24px;display:flex;align-items:center;justify-content:center;
-  gap:16px;flex-wrap:wrap;
-  padding:18px 22px;border-radius:16px;
+  margin-top:24px;display:flex;align-items:center;justify-content:space-between;
+  gap:14px 20px;flex-wrap:wrap;
+  padding:16px 16px 16px 22px;border-radius:16px;
   background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-sm);
+}
+.paket-cta .sum{display:flex;flex-direction:column;gap:3px;min-width:0}
+.paket-cta .sum span{
+  font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink-4);
+}
+.paket-cta .sum b{font-size:15.5px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+.paket-cta .sum i{
+  font-style:normal;font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;
+  font-size:12.5px;color:var(--ink-3);
 }
 
 /* ══════════ Keluaran per sesi ══════════
@@ -585,7 +606,6 @@ footer{border-top:1px solid var(--line);padding:44px 0 52px;position:relative;z-
 }
 @media (max-width:1080px){
   .pakets[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .pakets[data-n="4"] .harga{font-size:25px}
 }
 @media (max-width:900px){
   
@@ -634,6 +654,10 @@ footer{border-top:1px solid var(--line);padding:44px 0 52px;position:relative;z-
   
   .gal{gap:8px}
   .sheet .side.viewer{min-height:360px}
+  .pakets{gap:12px}
+  .paket{padding:18px 18px 16px}
+  .paket .top{margin-bottom:16px}
+  .paket-cta{padding:16px}
   .paket-cta .btn{margin-left:0;width:100%}
   .sitefoot .end{margin-left:0;text-align:left}
 }
