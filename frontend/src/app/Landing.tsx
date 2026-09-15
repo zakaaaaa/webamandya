@@ -3,8 +3,8 @@
 /*
  * Landing.tsx — halaman sewa photobooth (root "/").
  *
- * MASIH PLACEHOLDER: harga paket di bawah masih angka karangan, ganti
- * sebelum dipromosikan. WhatsApp, Instagram, dan email sudah data asli.
+ * Paket & harga jual mengikuti spreadsheet paket Pabrik Kenangan (15 Sep
+ * 2026). WhatsApp, Instagram, dan email sudah data asli.
  * Foto contoh masih siluet SVG, lihat photo-placeholder.ts.
  *
  * Dashboard tetap di /dashboard dan /login sampai subdomain
@@ -18,30 +18,23 @@ import { mountUnits, HERO_TUNE, SPEC_TUNE } from './unit3d'
 
 const WA = '6289508279690'
 
-type Paket = { nm: string; kode: string; harga: number; populer?: boolean; spec: [string, string][] }
+type Kategori = 'waktu' | 'cetak'
+type Paket = { kategori: Kategori; nm: string; skema: string; batas: string; harga: number }
 
+const KATEGORI: [Kategori, string][] = [
+  ['waktu', 'Berdasarkan waktu'],
+  ['cetak', 'Berdasarkan cetakan'],
+]
+
+/* Urutan array = urutan tampil, dipakai navigasi panah antar kartu. */
 const PAKET: Paket[] = [
-  {
-    nm: 'Kilat', kode: 'PK-02H', harga: 1800000,
-    spec: [
-      ['Durasi', '2 jam'], ['Cetak', 'Tanpa batas'], ['Operator', '1 orang'],
-      ['Frame', '1 desain kustom'], ['Properti', 'Set dasar'], ['Digital', 'QR + galeri'],
-    ],
-  },
-  {
-    nm: 'Pesta', kode: 'PK-04H', harga: 2900000, populer: true,
-    spec: [
-      ['Durasi', '4 jam'], ['Cetak', 'Tanpa batas'], ['Operator', '2 orang'],
-      ['Frame', '2 desain kustom'], ['Properti', 'Set lengkap'], ['Digital', 'QR + galeri + GIF'],
-    ],
-  },
-  {
-    nm: 'Produksi Penuh', kode: 'PK-08H', harga: 4500000,
-    spec: [
-      ['Durasi', '8 jam'], ['Cetak', 'Tanpa batas'], ['Operator', '2 + koordinator'],
-      ['Frame', 'Tanpa batas'], ['Properti', 'Kustom tema'], ['Digital', 'QR + galeri + GIF'],
-    ],
-  },
+  { kategori: 'waktu', nm: 'Kenangan Kilat', skema: '2 jam sewa', batas: 'Unlimited (~60 cetak)', harga: 1150000 },
+  { kategori: 'waktu', nm: 'Kenangan Manis', skema: '3 jam sewa', batas: 'Unlimited (~90 cetak)', harga: 1500000 },
+  { kategori: 'waktu', nm: 'Kenangan Abadi', skema: '4 jam sewa', batas: 'Unlimited (~120 cetak)', harga: 1900000 },
+  { kategori: 'cetak', nm: '50 Lembar Cerita', skema: 'Kuota 50 foto', batas: 'Maks. standby 3 jam', harga: 1000000 },
+  { kategori: 'cetak', nm: '100 Lembar Cerita', skema: 'Kuota 100 foto', batas: 'Maks. standby 4,5 jam', harga: 1650000 },
+  { kategori: 'cetak', nm: '150 Lembar Cerita', skema: 'Kuota 150 foto', batas: 'Maks. standby 6 jam', harga: 2250000 },
+  { kategori: 'cetak', nm: '200 Lembar Cerita', skema: 'Kuota 200 foto', batas: 'Maks. standby 7 jam', harga: 2900000 },
 ]
 
 /* Tiga contoh saja: cukup menunjukkan tiga gaya frame yang berbeda. */
@@ -62,7 +55,7 @@ const SPEK: [string, string][] = [
 
 const TANYA: [string, string][] = [
   ['Cetaknya benar-benar tanpa batas?',
-   'Benar. Selama jam sewa masih jalan, tamu boleh foto berkali-kali dan tiap sesi dicetak. Kertas dan tinta sudah kami tanggung, tidak ada tagihan tambahan di akhir acara.'],
+   'Untuk paket berdasarkan waktu, benar. Selama jam sewa masih jalan, tamu boleh foto berkali-kali dan tiap sesi dicetak. Paket berdasarkan cetakan memakai kuota 50 sampai 200 foto dengan batas waktu standby. Kertas dan tinta sudah kami tanggung, tidak ada tagihan tambahan di akhir acara.'],
   ['Berapa DP-nya dan kapan dilunasi?',
    'DP 30% untuk mengunci tanggal, sisanya dilunasi paling lambat di hari acara sebelum booth dipasang. Pembatalan lebih dari 14 hari sebelum acara, DP dikembalikan penuh.'],
   ['Frame-nya bisa dibuat khusus acara kami?',
@@ -116,7 +109,7 @@ export default function Landing() {
       `Tanggal acara: ${tglTxt}\n` +
       `Jenis acara: ${jenis}\n` +
       `Lokasi: ${kota}\n` +
-      `Paket yang dilirik: ${terpilih.nm} (${rupiah(terpilih.harga)})`
+      `Paket yang dilirik: ${terpilih.nm}, ${terpilih.skema} (${rupiah(terpilih.harga)})`
     window.open(`https://wa.me/${WA}?text=${encodeURIComponent(pesan)}`, '_blank', 'noopener')
   }
 
@@ -177,31 +170,36 @@ export default function Landing() {
           <div className="wrap">
             <div className="sec-head">
               <h2>Paket sewa</h2>
-              <p className="lede">Semua paket sudah termasuk operator, kertas, properti, dan galeri online. Cetak tidak dihitung per lembar.</p>
+              <p className="lede">Semua paket sudah termasuk operator, kertas, properti, dan galeri online. Pilih sewa per jam dengan cetak tanpa batas, atau paket kuota cetak.</p>
             </div>
 
-            <div className="pakets" role="radiogroup" aria-label="Pilih paket sewa">
-              {PAKET.map((p, i) => (
-                <div key={p.kode} className="paket" role="radio" tabIndex={0}
-                     aria-checked={pilih === i}
-                     onClick={() => kunciPaket(i)}
-                     onKeyDown={e => panahPaket(e, i)}>
-                  {p.populer && <span className="badge-pop">PALING SERING DIAMBIL</span>}
-                  <div className="top">
-                    <div>
-                      <h3 className="nm">{p.nm}</h3>
-                      <span className="kode">{p.kode}</span>
+            <div role="radiogroup" aria-label="Pilih paket sewa">
+              {KATEGORI.map(([k, label]) => {
+                const isi = PAKET.map((p, i) => ({ p, i })).filter(({ p }) => p.kategori === k)
+                return (
+                  <div key={k} className="pk-grup">
+                    <h3 className="pk-label">{label}</h3>
+                    <div className="pakets" data-n={isi.length}>
+                      {isi.map(({ p, i }) => (
+                        <div key={p.nm} className="paket" role="radio" tabIndex={0}
+                             aria-checked={pilih === i}
+                             onClick={() => kunciPaket(i)}
+                             onKeyDown={e => panahPaket(e, i)}>
+                          <div className="top">
+                            <div>
+                              <h4 className="nm">{p.nm}</h4>
+                              <span className="kode">{p.skema}</span>
+                            </div>
+                            <span className="mark" aria-hidden="true" />
+                          </div>
+                          <p className="harga num">{rupiah(p.harga)}<small>/ acara</small></p>
+                          <p className="batas">{p.batas}</p>
+                        </div>
+                      ))}
                     </div>
-                    <span className="mark" aria-hidden="true" />
                   </div>
-                  <p className="harga num">{rupiah(p.harga)}<small>/ acara</small></p>
-                  <dl className="spec">
-                    {p.spec.map(([k, v]) => (
-                      <div key={k}><dt>{k}</dt><dd>{v}</dd></div>
-                    ))}
-                  </dl>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             <div className="paket-cta">

@@ -333,7 +333,13 @@ p{margin:0}
 
 
 /* ══════════ Paket ══════════ */
+.pk-grup + .pk-grup{margin-top:34px}
+.pk-label{
+  font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-4);margin:0 0 14px;
+}
 .pakets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start}
+.pakets[data-n="4"]{grid-template-columns:repeat(4,minmax(0,1fr))}
 .paket{
   position:relative;text-align:left;width:100%;
   background:var(--surface);border:1.5px solid var(--line);border-radius:20px;
@@ -369,23 +375,12 @@ p{margin:0}
   font-size:25px;font-weight:600;letter-spacing:-.02em;color:var(--ink);
 }
 .paket .harga small{font-size:12px;font-weight:400;color:var(--ink-4);letter-spacing:0;margin-left:6px}
+/* Kartu empat kolom lebih sempit: harga 25px + "/ acara" akan patah baris. */
+.pakets[data-n="4"] .harga{font-size:21px}
 
-.spec{margin-top:20px;border-top:1px solid var(--line);padding-top:4px}
-.spec div{
-  display:flex;align-items:baseline;justify-content:space-between;gap:14px;
-  padding:8px 0;border-bottom:1px dashed var(--hair);
-  font-size:12.5px;
-}
-.spec div:last-child{border-bottom:0}
-.spec dt{color:var(--ink-4);font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.06em}
-.spec dd{margin:0;color:var(--ink-2);font-weight:600;text-align:right}
-
-.badge-pop{
-  position:absolute;top:-11px;left:24px;
-  padding:4px 11px;border-radius:100px;
-  background:linear-gradient(140deg,var(--red-light),var(--red-dark));color:#fff;
-  font-family:'IBM Plex Mono',monospace;font-size:9.5px;letter-spacing:.14em;
-  box-shadow:0 4px 12px rgba(212,43,34,.34);
+.paket .batas{
+  margin:18px 0 0;padding-top:12px;border-top:1px solid var(--line);
+  font-size:12.5px;font-weight:600;color:var(--ink-2);
 }
 
 .paket-cta{
@@ -594,17 +589,15 @@ footer{border-top:1px solid var(--line);padding:44px 0 52px;position:relative;z-
   }
 }
 @media (max-width:1080px){
-  
-  
-  
-  
+  .pakets[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .pakets[data-n="4"] .harga{font-size:25px}
 }
 @media (max-width:900px){
   
   .navlinks{display:none}
   .statusbar .wrap{gap:12px}
   .statusbar .btn{margin-left:auto}
-  .pakets{grid-template-columns:1fr}
+  .pakets,.pakets[data-n="4"]{grid-template-columns:1fr}
   .outputs{grid-template-columns:1fr;gap:12px}
   .sheet{grid-template-columns:1fr}
   .sheet .side + .side{border-left:0;border-top:1px solid var(--line)}
