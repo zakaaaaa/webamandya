@@ -33,11 +33,36 @@ function saringKategoriMati(frames, kategoriAktif) {
 // frame tanpa kategori. Nilai aneh dari database jatuh ke harga setelan,
 // bukan ke 0: sesi QRIS berharga 0 ditolak DOKU di depan pelanggan.
 function hargaSesi(settings, hargaKategori) {
-  const n = Number(hargaKategori);
-  if (hargaKategori !== null && hargaKategori !== undefined && Number.isInteger(n) && n > 0) {
-    return n;
+  return angkaHarga(hargaKategori) ?? Number(settings?.session_price ?? 0);
+}
+
+// Harga positif bulat, atau null untuk kosong/nol/rusak.
+function angkaHarga(nilai) {
+  if (nilai === null || nilai === undefined) return null;
+  const n = Number(nilai);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+// Jenis kertas sesi: 'glossy' | 'bookpaper' | null.
+//
+// Pilihan kertas hanya ada di frame yang punya frames.bookpaper_price (frame
+// A4 Newspaper). Frame lain selalu null, apa pun yang dikirim alat — supaya
+// pelanggan yang pindah dari frame koran ke strip 4R di sesi yang sama tidak
+// ikut membawa harga bookpaper. Di frame berpilihan, nilai selain 'bookpaper'
+// (termasuk app lama yang tidak mengirim apa pun) berarti glossy, yaitu harga
+// kategori seperti sebelum pilihan ini ada.
+function kertasSesi(paperType, hargaBookpaper) {
+  if (angkaHarga(hargaBookpaper) === null) return null;
+  return paperType === 'bookpaper' ? 'bookpaper' : 'glossy';
+}
+
+// Harga sesi dengan memperhitungkan kertas. [info] = hasil hargaKategoriFrame
+// ({ harga, hargaBookpaper }).
+function hargaSesiKertas(settings, info, paperType) {
+  if (kertasSesi(paperType, info?.hargaBookpaper) === 'bookpaper') {
+    return angkaHarga(info.hargaBookpaper);
   }
-  return Number(settings?.session_price ?? 0);
+  return hargaSesi(settings, info?.harga);
 }
 
 // Kategori untuk payload kios/HP: harga efektifnya sudah dihitung di sini,
@@ -50,4 +75,4 @@ function kategoriDenganHarga(categories, settings) {
   }));
 }
 
-module.exports = { saringKategoriMati, hargaSesi, kategoriDenganHarga };
+module.exports = { saringKategoriMati, hargaSesi, kategoriDenganHarga, kertasSesi, hargaSesiKertas };

@@ -35,7 +35,8 @@ async function cariSesi(transactionCode) {
 router.post('/generate', async (req, res) => {
   // frame_id opsional (app baru): frame yang sedang dipakai pelanggan, jaring
   // pengaman kalau attach-frame di latar gagal. Diperiksa milik klien sesi.
-  const { session_uuid, frame_id } = req.body;
+  // paper_type opsional: kertas pilihan pelanggan di frame newspaper A4.
+  const { session_uuid, frame_id, paper_type } = req.body;
 
   if (!session_uuid) {
     return res.status(400).json({ success: false, message: 'session_uuid wajib diisi.' });
@@ -68,7 +69,7 @@ router.post('/generate', async (req, res) => {
     //    selalu bisa menemukan sesinya.
     //    Harga ditetapkan ulang dari kategori frame tepat sebelum ditagih —
     //    inilah angka yang benar-benar masuk ke order DOKU.
-    const sesiBerharga = await sesuaikanHargaSesi(session, { frameId: frame_id });
+    const sesiBerharga = await sesuaikanHargaSesi(session, { frameId: frame_id, paperType: paper_type });
     const amountNum = parseInt(sesiBerharga.amount) || 0;
     const invoiceNumber = await buatInvoice(sesiBerharga, amountNum);
 

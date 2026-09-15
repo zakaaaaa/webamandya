@@ -1,6 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { saringKategoriMati, hargaSesi, kategoriDenganHarga } = require('../src/utils/frame-categories');
+const {
+  saringKategoriMati, hargaSesi, kategoriDenganHarga, kertasSesi, hargaSesiKertas,
+} = require('../src/utils/frame-categories');
 
 const KATEGORI_AKTIF = [{ id: 'k-wisuda' }, { id: 'k-halloween' }];
 
@@ -74,4 +76,37 @@ test('payload kategori membawa harga efektif tanpa kolom mentahnya', () => {
     { id: 'k2', name: 'Koran', harga: 30000 },
   ]);
   assert.deepStrictEqual(kategoriDenganHarga(null, SETELAN), []);
+});
+
+// ── Pilihan kertas (frame newspaper A4) ──
+
+const KORAN = { harga: 30000, hargaBookpaper: 20000 };
+
+test('frame berpilihan kertas: bookpaper memakai harga bookpaper, glossy harga kategori', () => {
+  assert.strictEqual(hargaSesiKertas(SETELAN, KORAN, 'bookpaper'), 20000);
+  assert.strictEqual(hargaSesiKertas(SETELAN, KORAN, 'glossy'), 30000);
+});
+
+// App lama tidak mengirim pilihan kertas: tagihannya harus tetap harga yang
+// berlaku sebelum pilihan ini ada, bukan harga bookpaper yang lebih murah.
+test('frame berpilihan kertas tanpa pilihan atau pilihan aneh: glossy', () => {
+  for (const aneh of [undefined, null, '', 'BOOKPAPER', 'hvs']) {
+    assert.strictEqual(kertasSesi(aneh, 20000), 'glossy', String(aneh));
+    assert.strictEqual(hargaSesiKertas(SETELAN, KORAN, aneh), 30000, String(aneh));
+  }
+});
+
+// Pelanggan pindah dari frame koran ke strip 4R di sesi yang sama: harga dan
+// kertas bookpaper tidak boleh ikut terbawa.
+test('frame tanpa pilihan kertas: kertas null dan bookpaper diabaikan', () => {
+  assert.strictEqual(kertasSesi('bookpaper', null), null);
+  assert.strictEqual(hargaSesiKertas(SETELAN, { harga: 35000, hargaBookpaper: null }, 'bookpaper'), 35000);
+  assert.strictEqual(hargaSesiKertas(SETELAN, { harga: null, hargaBookpaper: null }, 'bookpaper'), 30000);
+});
+
+test('harga bookpaper tidak sah dianggap tidak ada pilihan kertas', () => {
+  for (const aneh of [0, -1, 12.5, 'abc']) {
+    assert.strictEqual(kertasSesi('bookpaper', aneh), null, String(aneh));
+    assert.strictEqual(hargaSesiKertas(SETELAN, { harga: null, hargaBookpaper: aneh }, 'bookpaper'), 30000);
+  }
 });

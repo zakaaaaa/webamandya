@@ -12,7 +12,7 @@ const DOKU_BASE_URL = process.env.DOKU_BASE_URL || 'https://api.doku.com';
 // Kolom yang dibutuhkan semua jalur pembayaran dari sebuah baris sesi.
 const KOLOM_SESI =
   'id, transaction_code, device_id, client_id, payment_status, payment_method, transaction_type, ' +
-  'amount, original_amount, frame_id, updated_at, clients(doku_client_id, doku_secret_key)';
+  'amount, original_amount, frame_id, paper_type, updated_at, clients(doku_client_id, doku_secret_key)';
 
 async function tanyaDoku({ doku_client_id, doku_secret_key }, nomor) {
   const targetPath = `/orders/v1/status/${nomor}`;

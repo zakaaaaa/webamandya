@@ -27,6 +27,7 @@ const FRAMES = {
   'f-4r':       { client_id: KLIEN, harga: null },   // kategori tanpa harga
   'f-lepas':    { client_id: KLIEN, harga: null, tanpaKategori: true },
   'f-asing':    { client_id: 'klien-lain', harga: 99000 },
+  'f-koran':    { client_id: KLIEN, harga: 30000, bookpaper: 20000 },
 };
 
 function dunia({ status = 'pending', setelanUnit = null, gagalFrame = false, lunasDuluan = false } = {}) {
@@ -47,7 +48,11 @@ function dunia({ status = 'pending', setelanUnit = null, gagalFrame = false, lun
             const f = FRAMES[q.filter.id];
             if (!f || f.client_id !== q.filter.client_id) return { data: null, error: null };
             return {
-              data: { id: q.filter.id, frame_categories: f.tanpaKategori ? null : { session_price: f.harga } },
+              data: {
+                id: q.filter.id,
+                bookpaper_price: f.bookpaper ?? null,
+                frame_categories: f.tanpaKategori ? null : { session_price: f.harga },
+              },
               error: null,
             };
           }
@@ -157,6 +162,56 @@ test('database gagal: tidak melempar, amount lama dipakai', async () => {
   } finally {
     console.error = asli;
   }
+});
+
+// ── Pilihan kertas frame newspaper A4 ──
+
+test('pelanggan memilih bookpaper: amount turun ke harga bookpaper dan kertasnya dicatat', async () => {
+  const w = dunia();
+  const hasil = await sesuaikanHargaSesi(sesi({ frame_id: 'f-koran' }), { paperType: 'bookpaper' });
+  assert.strictEqual(hasil.amount, 20000);
+  assert.strictEqual(hasil.paper_type, 'bookpaper');
+  assert.deepStrictEqual(w.tulis[0].patch, { paper_type: 'bookpaper', amount: 20000, original_amount: 20000 });
+});
+
+test('berbalik ke glossy di sesi yang sama: harga kategori lagi', async () => {
+  dunia();
+  const s = sesi({ frame_id: 'f-koran', paper_type: 'bookpaper', amount: 20000, original_amount: 20000 });
+  const hasil = await sesuaikanHargaSesi(s, { paperType: 'glossy' });
+  assert.strictEqual(hasil.amount, 30000);
+  assert.strictEqual(hasil.paper_type, 'glossy');
+});
+
+// Voucher tidak membawa pilihan kertas; yang tersimpan di sesi harus menang,
+// kalau tidak diskon dihitung dari harga glossy.
+test('tanpa pilihan kertas dari pemanggil: kertas tersimpan di sesi dipakai, tidak menulis apa pun', async () => {
+  const w = dunia();
+  const s = sesi({ frame_id: 'f-koran', paper_type: 'bookpaper', amount: 20000, original_amount: 20000 });
+  assert.strictEqual(await sesuaikanHargaSesi(s), s);
+  assert.strictEqual(w.tulis.length, 0);
+});
+
+test('pindah dari koran bookpaper ke frame tanpa pilihan kertas: kertas dikosongkan, harga kategori', async () => {
+  const w = dunia();
+  const s = sesi({ frame_id: 'f-koran', paper_type: 'bookpaper', amount: 20000, original_amount: 20000 });
+  const hasil = await sesuaikanHargaSesi(s, { frameId: 'f-keychain', paperType: null });
+  assert.strictEqual(hasil.amount, 35000);
+  assert.strictEqual(hasil.paper_type, null);
+  assert.strictEqual(w.tulis[0].patch.frame_id, 'f-keychain');
+});
+
+test('bookpaper diminta untuk frame tanpa pilihan kertas: diabaikan', async () => {
+  const w = dunia();
+  const hasil = await sesuaikanHargaSesi(sesi({ frame_id: 'f-keychain' }), { paperType: 'bookpaper' });
+  assert.strictEqual(hasil.amount, 35000);
+  assert.strictEqual(w.tulis[0].patch.paper_type, undefined);
+});
+
+test('app lama di frame koran tanpa pilihan kertas: glossy, harga kategori', async () => {
+  dunia();
+  const hasil = await sesuaikanHargaSesi(sesi({ frame_id: 'f-koran' }));
+  assert.strictEqual(hasil.amount, 30000);
+  assert.strictEqual(hasil.paper_type, 'glossy');
 });
 
 test('sesi app lama tanpa frame sama sekali: harga default', async () => {

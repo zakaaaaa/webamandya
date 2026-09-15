@@ -4,7 +4,7 @@ const { supabase, validateDevice } = require('../middleware/validateDevice');
 const { resolveSettings } = require('../utils/settings');
 const { KOLOM_SESI, rekonsiliasiSesi } = require('../utils/pembayaran');
 const { STATUS_BELUM_LUNAS } = require('../utils/pembayaran-logika');
-const { hargaSesi } = require('../utils/frame-categories');
+const { hargaSesi, kertasSesi, hargaSesiKertas } = require('../utils/frame-categories');
 const { hargaKategoriFrame, sesuaikanHargaSesi } = require('../utils/harga-sesi');
 
 function metodeDiizinkan(settings) {
@@ -77,6 +77,7 @@ router.post('/start', validateDevice, async (req, res) => {
     extra_print_count = 0,
     code,
     frame_id,
+    paper_type,
   } = req.body;
   const { id: device_id, client_id } = req.device;
 
@@ -98,6 +99,7 @@ router.post('/start', validateDevice, async (req, res) => {
     // ── Hitung harga dasar dari setting ──
     let original_amount;
     let frameSah = null;
+    let kertas = null;
     if (transaction_type === 'extra_print') {
       if (!settings.extra_print_enabled) {
         return res.status(400).json({ success: false, message: 'Cetak tambahan tidak diaktifkan.', code: 'EXTRA_PRINT_DISABLED' });
@@ -118,7 +120,9 @@ router.post('/start', validateDevice, async (req, res) => {
         console.error('[Session] Harga frame gagal dibaca, pakai harga setelan:', e.message);
       }
       if (info.ada) frameSah = frame_id;
-      original_amount = hargaSesi(settings, info.harga);
+      // Frame newspaper A4 menawarkan kertas bookpaper dengan harga sendiri.
+      kertas = kertasSesi(paper_type, info.hargaBookpaper);
+      original_amount = hargaSesiKertas(settings, info, kertas);
     }
 
     let final_amount = original_amount;
@@ -151,6 +155,7 @@ router.post('/start', validateDevice, async (req, res) => {
         payment_status: isFree ? 'free' : 'pending',
         paid_at: isFree ? new Date().toISOString() : null,
         ...(frameSah ? { frame_id: frameSah, selected_frame_id: frameSah, frame_locked_at: new Date().toISOString() } : {}),
+        ...(kertas ? { paper_type: kertas } : {}),
       })
       .select()
       .single();
@@ -180,7 +185,8 @@ router.post('/start', validateDevice, async (req, res) => {
 // PATCH /api/photobooth/session/attach-frame
 // Dipanggil setelah user memilih frame supaya dashboard tahu frame mana yang dipakai.
 router.patch('/attach-frame', validateDevice, async (req, res) => {
-  const { session_uuid, frame_id } = req.body;
+  // paper_type opsional: kertas pilihan pelanggan di frame newspaper A4.
+  const { session_uuid, frame_id, paper_type } = req.body;
   const { client_id } = req.device;
 
   if (!session_uuid || !frame_id) {
@@ -221,9 +227,16 @@ router.patch('/attach-frame', validateDevice, async (req, res) => {
 
     // Pelanggan bisa kembali dari kamera dan memilih frame kategori lain di
     // sesi yang sama; harganya ikut berpindah selama sesi belum lunas.
-    const sesi = await sesuaikanHargaSesi(updated);
+    // Kertas ikut berpindah juga: frame tanpa pilihan kertas mengosongkannya.
+    const sesi = await sesuaikanHargaSesi(updated, { paperType: paper_type });
 
-    return res.json({ success: true, session_id: updated.id, frame_id, amount: Number(sesi.amount) });
+    return res.json({
+      success: true,
+      session_id: updated.id,
+      frame_id,
+      amount: Number(sesi.amount),
+      paper_type: sesi.paper_type ?? null,
+    });
   } catch (e) {
     console.error('[Session] Attach frame exception:', e);
     return res.status(500).json({ success: false, message: 'Server error.' });
