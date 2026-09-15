@@ -3,8 +3,8 @@
 /*
  * Landing.tsx — halaman sewa photobooth (root "/").
  *
- * Paket mengikuti spreadsheet paket Pabrik Kenangan (15 Sep 2026); harga
- * = harga jual spreadsheet + 20%. WhatsApp, Instagram, dan email sudah data asli.
+ * Paket mengikuti Pricelist_Pabrik_Kenangan_Margin_30.xlsx (15 Sep 2026);
+ * harga = kolom Harga Jual + 20%. WhatsApp, Instagram, dan email sudah data asli.
  * Foto contoh masih siluet SVG, lihat photo-placeholder.ts.
  *
  * Dashboard tetap di /dashboard dan /login sampai subdomain
@@ -19,7 +19,7 @@ import { mountUnits, HERO_TUNE, SPEC_TUNE } from './unit3d'
 const WA = '6289508279690'
 
 type Kategori = 'waktu' | 'cetak'
-type Paket = { kategori: Kategori; nm: string; skema: string; batas: string; harga: number }
+type Paket = { kategori: Kategori; nm: string; skema: string; harga: number }
 
 const KATEGORI: [Kategori, string][] = [
   ['waktu', 'Berdasarkan waktu'],
@@ -28,13 +28,13 @@ const KATEGORI: [Kategori, string][] = [
 
 /* Urutan array = urutan tampil, dipakai navigasi panah antar kartu. */
 const PAKET: Paket[] = [
-  { kategori: 'waktu', nm: 'Kenangan Kilat', skema: '2 jam sewa', batas: 'Unlimited (~60 cetak)', harga: 1380000 },
-  { kategori: 'waktu', nm: 'Kenangan Manis', skema: '3 jam sewa', batas: 'Unlimited (~90 cetak)', harga: 1800000 },
-  { kategori: 'waktu', nm: 'Kenangan Abadi', skema: '4 jam sewa', batas: 'Unlimited (~120 cetak)', harga: 2280000 },
-  { kategori: 'cetak', nm: '50 Lembar Cerita', skema: 'Kuota 50 foto', batas: 'Maks. standby 3 jam', harga: 1200000 },
-  { kategori: 'cetak', nm: '100 Lembar Cerita', skema: 'Kuota 100 foto', batas: 'Maks. standby 4,5 jam', harga: 1980000 },
-  { kategori: 'cetak', nm: '150 Lembar Cerita', skema: 'Kuota 150 foto', batas: 'Maks. standby 6 jam', harga: 2700000 },
-  { kategori: 'cetak', nm: '200 Lembar Cerita', skema: 'Kuota 200 foto', batas: 'Maks. standby 7 jam', harga: 3480000 },
+  { kategori: 'waktu', nm: 'Kenangan Kilat', skema: '2 jam sewa', harga: 780000 },
+  { kategori: 'waktu', nm: 'Kenangan Manis', skema: '3 jam sewa', harga: 1020000 },
+  { kategori: 'waktu', nm: 'Kenangan Abadi', skema: '4 jam sewa', harga: 1260000 },
+  { kategori: 'cetak', nm: '50 Lembar Cerita', skema: 'Kuota 50 foto', harga: 660000 },
+  { kategori: 'cetak', nm: '100 Lembar Cerita', skema: 'Kuota 100 foto', harga: 1140000 },
+  { kategori: 'cetak', nm: '150 Lembar Cerita', skema: 'Kuota 150 foto', harga: 1560000 },
+  { kategori: 'cetak', nm: '200 Lembar Cerita', skema: 'Kuota 200 foto', harga: 1980000 },
 ]
 
 /* Tiga contoh saja: cukup menunjukkan tiga gaya frame yang berbeda. */
@@ -193,7 +193,6 @@ export default function Landing() {
                             <span className="mark" aria-hidden="true" />
                           </div>
                           <p className="harga num">{rupiah(p.harga)}<small>/ acara</small></p>
-                          <p className="batas">{p.batas}</p>
                         </div>
                       ))}
                     </div>

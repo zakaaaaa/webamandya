@@ -378,11 +378,6 @@ p{margin:0}
 /* Kartu empat kolom lebih sempit: harga 25px + "/ acara" akan patah baris. */
 .pakets[data-n="4"] .harga{font-size:21px}
 
-.paket .batas{
-  margin:18px 0 0;padding-top:12px;border-top:1px solid var(--line);
-  font-size:12.5px;font-weight:600;color:var(--ink-2);
-}
-
 .paket-cta{
   margin-top:24px;display:flex;align-items:center;justify-content:center;
   gap:16px;flex-wrap:wrap;
