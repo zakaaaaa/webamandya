@@ -268,48 +268,8 @@ p{margin:0}
 
 
 
-/* — Kolom strip — */
 
 
-.strip{
-  --strip-bg:#FFFFFF;
-  --strip-ink:#150C09;
-  --strip-sub:#9E8880;
-  --strip-edge:transparent;
-  --strip-gap:6px;
-  background:var(--strip-bg);
-  border:2px solid var(--strip-edge);
-  border-radius:8px;
-  padding:9px 9px 0;
-  box-shadow:0 14px 34px rgba(0,0,0,.4);
-  display:flex;flex-direction:column;
-  transition:background .3s,border-color .3s;
-}
-.strip[data-frame="pita"]{--strip-edge:#D42B22}
-.strip[data-frame="malam"]{--strip-bg:#1A1210;--strip-ink:#F7EFEB;--strip-sub:#A3897F}
-.strip[data-frame="kraft"]{--strip-bg:#E7D8C6;--strip-ink:#4A3320;--strip-sub:#8B7355}
-
-.strip .cells{display:flex;flex-direction:column;gap:var(--strip-gap);flex:1}
-.strip .cell{
-  aspect-ratio:4/3;border-radius:3px;overflow:hidden;position:relative;
-  background:color-mix(in srgb,var(--strip-ink) 8%,transparent);
-  display:grid;place-items:center;
-}
-.strip .cell svg{width:100%;height:100%;object-fit:cover}
-@keyframes land{
-  0%{transform:scale(.86) translateY(-14px);opacity:0;filter:brightness(2.2)}
-  100%{transform:none;opacity:1;filter:none}
-}
-.strip .foot{
-  padding:10px 2px 11px;display:flex;align-items:baseline;justify-content:space-between;gap:8px;
-}
-.strip .foot b{
-  font-size:8.5px;font-weight:800;letter-spacing:.14em;color:var(--strip-ink);
-  text-transform:uppercase;
-}
-.strip .foot span{
-  font-family:'IBM Plex Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--strip-sub);
-}
 
 
 
@@ -411,7 +371,7 @@ p{margin:0}
    (dan satu-satunya yang punya wujud fisik), dua lainnya pelengkap digital.
    Bobot kolomnya mengikuti kenyataan itu. */
 .outputs{
-  display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);
+  display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);
   gap:18px;align-items:stretch;
 }
 .out{
@@ -422,10 +382,9 @@ p{margin:0}
 .out p{color:var(--ink-3);font-size:13.5px;line-height:1.62;max-width:52ch}
 .out-side{display:flex;flex-direction:column;gap:18px}
 .out-side .out{flex:1}
-/* Contoh strip didorong ke dasar kartu, jadi tepi bawahnya sejajar dengan
+/* Cetakan didorong ke dasar kartu, jadi tepi bawahnya sejajar dengan
    kartu Live photo di kolom sebelah berapa pun panjang teksnya. */
 .out-main{display:flex;flex-direction:column}
-.out-main .gal{margin-top:auto;padding-top:24px}
 
 /* ══════════ Galeri ══════════ */
 
@@ -433,9 +392,32 @@ p{margin:0}
 
 
 
-.gal{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:24px}
-.gal .strip{box-shadow:var(--shadow-md);animation:land .4s ease both}
-.gal .strip .cell{background:none}
+/* width/height di <img>/<video> memberi rasio sejak awal, jadi kartu tidak
+   melompat saat aset lazy-load selesai dimuat. */
+.media{margin:0;overflow:hidden;border-radius:12px;background:var(--surface-2)}
+.media img,.media video{display:block;width:100%;height:auto}
+
+/* Panel mengisi sisa tinggi kartu (flex:1) dan cetakan diletakkan di
+   tengahnya, jadi selisih tinggi dengan kolom kanan jadi latar panel,
+   bukan celah kosong antara teks dan foto. */
+.media-print{
+  flex:1;margin-top:20px;padding:clamp(18px,3vw,28px);
+  display:flex;align-items:center;justify-content:center;border-radius:14px;
+}
+.media-print img{
+  width:auto;max-width:100%;height:clamp(320px,38vw,520px);object-fit:contain;
+  border-radius:4px;box-shadow:0 18px 40px rgba(74,25,18,.18),0 3px 10px rgba(0,0,0,.08);
+}
+
+.out-gif .media{aspect-ratio:3/2;margin-bottom:18px}
+
+/* Live photo berisi strip utuh 2:3; di bawah ~170px isi frame-nya tak terbaca. */
+.out-live{
+  display:grid;grid-template-columns:minmax(0,1fr) clamp(170px,17vw,210px);
+  gap:20px;align-items:center;
+}
+.media-live{aspect-ratio:460/688;border-radius:10px;box-shadow:var(--shadow-sm)}
+.media-live video{height:100%;object-fit:cover}
 
 /* ══════════ Datasheet mesin ══════════ */
 .sheet{
@@ -606,6 +588,15 @@ footer{border-top:1px solid var(--line);padding:44px 0 52px;position:relative;z-
 }
 @media (max-width:1080px){
   .pakets[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* Kolom kanan terlalu sempit untuk teks + video bersebelahan. */
+  .out-live{grid-template-columns:1fr}
+  .media-live{width:min(220px,100%);justify-self:center}
+  /* Kolom kanan jadi lebih tinggi karena Live photo ditumpuk; cetakan ikut
+     dibesarkan supaya panelnya tidak didominasi latar kosong. */
+  .media-print img{height:clamp(420px,56vw,600px)}
+}
+@media (max-width:900px){
+  .media-print img{height:clamp(320px,90vw,520px)}
 }
 @media (max-width:900px){
   
@@ -614,6 +605,8 @@ footer{border-top:1px solid var(--line);padding:44px 0 52px;position:relative;z-
   .statusbar .btn{margin-left:auto}
   .pakets,.pakets[data-n="4"]{grid-template-columns:1fr}
   .outputs{grid-template-columns:1fr;gap:12px}
+  .out-live{grid-template-columns:minmax(0,1fr) 40%}
+  .media-live{width:auto;justify-self:stretch}
   .sheet{grid-template-columns:1fr}
   .sheet .side + .side{border-left:0;border-top:1px solid var(--line)}
   .book{grid-template-columns:1fr}
@@ -645,14 +638,11 @@ footer{border-top:1px solid var(--line);padding:44px 0 52px;position:relative;z-
   .hero-unit .hint{font-size:8.5px;right:16%;bottom:-2px}
   
   
-  .strip .cells{flex-direction:row}
-  .strip .cell{flex:1;aspect-ratio:3/4}
   
   
   
   
   
-  .gal{gap:8px}
   .sheet .side.viewer{min-height:360px}
   .pakets{gap:12px}
   .paket{padding:18px 18px 16px}

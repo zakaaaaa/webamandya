@@ -5,15 +5,15 @@
  *
  * Paket mengikuti Pricelist_Pabrik_Kenangan_Margin_30.xlsx (15 Sep 2026);
  * harga = kolom Harga Jual + 20%. WhatsApp, Instagram, dan email sudah data asli.
- * Foto contoh masih siluet SVG, lihat photo-placeholder.ts.
+ * Contoh hasil di section "Yang tamu bawa pulang" adalah aset asli di
+ * public/landing/ (foto 4R, GIF, dan live photo dari sesi sungguhan).
  *
  * Dashboard tetap di /dashboard dan /login sampai subdomain
  * app.pabrikenangan.my.id disiapkan.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { LANDING_CSS } from './landing.css'
-import { photoSVG } from './photo-placeholder'
 import { mountUnits, HERO_TUNE, SPEC_TUNE } from './unit3d'
 
 const WA = '6289508279690'
@@ -35,13 +35,6 @@ const PAKET: Paket[] = [
   { kategori: 'cetak', nm: '100 Lembar Cerita', skema: 'Kuota 100 foto', harga: 1140000 },
   { kategori: 'cetak', nm: '150 Lembar Cerita', skema: 'Kuota 150 foto', harga: 1560000 },
   { kategori: 'cetak', nm: '200 Lembar Cerita', skema: 'Kuota 200 foto', harga: 1980000 },
-]
-
-/* Tiga contoh saja: cukup menunjukkan tiga gaya frame yang berbeda. */
-const STRIP = [
-  { label: 'Resepsi', frame: 'klasik', seed: 2 },
-  { label: 'Sweet 17', frame: 'pita', seed: 0 },
-  { label: 'Gathering', frame: 'malam', seed: 3 },
 ]
 
 const SPEK: [string, string][] = [
@@ -92,10 +85,16 @@ export default function Landing() {
     return mountUnits(t)
   }, [])
 
-  const strips = useMemo(
-    () => STRIP.map(s => ({ ...s, cells: [0, 1, 2, 3].map(i => photoSVG(s.seed + i)) })),
-    [],
-  )
+  const liveRef = useRef<HTMLVideoElement>(null)
+  useEffect(() => {
+    // muted diset lewat properti: React tidak merender atribut `muted` ke HTML,
+    // dan iOS Safari menolak memutar otomatis video yang tidak di-mute.
+    const v = liveRef.current
+    if (!v) return
+    v.muted = true
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    v.play().catch(() => {})
+  }, [])
 
   const terpilih = PAKET[pilih]
 
@@ -222,29 +221,33 @@ export default function Landing() {
             <div className="outputs">
               <div className="out out-main">
                 <h3>Foto</h3>
-                <p>Strip empat frame di kertas glossy 260 gsm ukuran 4R, dicetak di lokasi. Versi digitalnya juga bisa diunduh satuan, tanpa frame.</p>
-                <div className="gal">
-                  {strips.map(s => (
-                    <div key={s.label} className="strip" data-frame={s.frame}
-                         role="img" aria-label={`Contoh strip foto acara ${s.label}`}>
-                      <div className="cells">
-                        {s.cells.map((svg, i) => (
-                          <div key={i} className="cell" dangerouslySetInnerHTML={{ __html: svg }} />
-                        ))}
-                      </div>
-                      <div className="foot"><b>{s.label}</b><span>4R &middot; 260gsm</span></div>
-                    </div>
-                  ))}
-                </div>
+                <p>Satu lembar 4R glossy 260 gsm berisi dua strip kembar dengan frame acaramu, dicetak di lokasi dan tinggal dipotong jadi dua. Versi digitalnya juga bisa diunduh satuan, tanpa frame.</p>
+                <figure className="media media-print">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- aset statis berukuran tetap, tidak perlu optimasi next/image */}
+                  <img src="/landing/hasil-foto.webp" width={720} height={1080} loading="lazy" decoding="async"
+                       alt="Contoh cetakan 4R: dua strip kembar berisi tiga jepretan dengan frame acara Count Fest" />
+                </figure>
               </div>
               <div className="out-side">
-                <div className="out">
+                <div className="out out-gif">
+                  <figure className="media">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- GIF animasi, next/image akan membekukannya */}
+                    <img src="/landing/hasil-gif.gif" width={480} height={320} loading="lazy" decoding="async"
+                         alt="Contoh GIF animasi dari jepretan satu sesi" />
+                  </figure>
                   <h3>GIF animasi</h3>
-                  <p>Keempat jepretan disusun jadi animasi berulang. Ukurannya ringan, enak dikirim di grup atau dipasang di status.</p>
+                  <p>Jepretan dalam satu sesi disusun jadi animasi berulang. Ukurannya ringan, enak dikirim di grup atau dipasang di status.</p>
                 </div>
-                <div className="out">
-                  <h3>Live photo</h3>
-                  <p>Video pendek dari detik sebelum dan sesudah jepretan, lengkap dengan gerak dan tawa yang tidak tertangkap di foto diam.</p>
+                <div className="out out-live">
+                  <div>
+                    <h3>Live photo</h3>
+                    <p>Video pendek dari detik sebelum dan sesudah jepretan, lengkap dengan frame acara, gerak, dan tawa yang tidak tertangkap di foto diam.</p>
+                  </div>
+                  <figure className="media media-live">
+                    <video ref={liveRef} src="/landing/hasil-live.mp4" poster="/landing/hasil-live.jpg"
+                           width={460} height={688} loop playsInline preload="metadata"
+                           aria-label="Contoh live photo: strip foto dengan frame acara yang bergerak" />
+                  </figure>
                 </div>
               </div>
             </div>
