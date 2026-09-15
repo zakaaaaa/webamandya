@@ -3,8 +3,8 @@
 /*
  * Landing.tsx — halaman sewa photobooth (root "/").
  *
- * Paket & harga jual mengikuti spreadsheet paket Pabrik Kenangan (15 Sep
- * 2026). WhatsApp, Instagram, dan email sudah data asli.
+ * Paket mengikuti spreadsheet paket Pabrik Kenangan (15 Sep 2026); harga
+ * = harga jual spreadsheet + 20%. WhatsApp, Instagram, dan email sudah data asli.
  * Foto contoh masih siluet SVG, lihat photo-placeholder.ts.
  *
  * Dashboard tetap di /dashboard dan /login sampai subdomain
@@ -28,13 +28,13 @@ const KATEGORI: [Kategori, string][] = [
 
 /* Urutan array = urutan tampil, dipakai navigasi panah antar kartu. */
 const PAKET: Paket[] = [
-  { kategori: 'waktu', nm: 'Kenangan Kilat', skema: '2 jam sewa', batas: 'Unlimited (~60 cetak)', harga: 1150000 },
-  { kategori: 'waktu', nm: 'Kenangan Manis', skema: '3 jam sewa', batas: 'Unlimited (~90 cetak)', harga: 1500000 },
-  { kategori: 'waktu', nm: 'Kenangan Abadi', skema: '4 jam sewa', batas: 'Unlimited (~120 cetak)', harga: 1900000 },
-  { kategori: 'cetak', nm: '50 Lembar Cerita', skema: 'Kuota 50 foto', batas: 'Maks. standby 3 jam', harga: 1000000 },
-  { kategori: 'cetak', nm: '100 Lembar Cerita', skema: 'Kuota 100 foto', batas: 'Maks. standby 4,5 jam', harga: 1650000 },
-  { kategori: 'cetak', nm: '150 Lembar Cerita', skema: 'Kuota 150 foto', batas: 'Maks. standby 6 jam', harga: 2250000 },
-  { kategori: 'cetak', nm: '200 Lembar Cerita', skema: 'Kuota 200 foto', batas: 'Maks. standby 7 jam', harga: 2900000 },
+  { kategori: 'waktu', nm: 'Kenangan Kilat', skema: '2 jam sewa', batas: 'Unlimited (~60 cetak)', harga: 1380000 },
+  { kategori: 'waktu', nm: 'Kenangan Manis', skema: '3 jam sewa', batas: 'Unlimited (~90 cetak)', harga: 1800000 },
+  { kategori: 'waktu', nm: 'Kenangan Abadi', skema: '4 jam sewa', batas: 'Unlimited (~120 cetak)', harga: 2280000 },
+  { kategori: 'cetak', nm: '50 Lembar Cerita', skema: 'Kuota 50 foto', batas: 'Maks. standby 3 jam', harga: 1200000 },
+  { kategori: 'cetak', nm: '100 Lembar Cerita', skema: 'Kuota 100 foto', batas: 'Maks. standby 4,5 jam', harga: 1980000 },
+  { kategori: 'cetak', nm: '150 Lembar Cerita', skema: 'Kuota 150 foto', batas: 'Maks. standby 6 jam', harga: 2700000 },
+  { kategori: 'cetak', nm: '200 Lembar Cerita', skema: 'Kuota 200 foto', batas: 'Maks. standby 7 jam', harga: 3480000 },
 ]
 
 /* Tiga contoh saja: cukup menunjukkan tiga gaya frame yang berbeda. */
