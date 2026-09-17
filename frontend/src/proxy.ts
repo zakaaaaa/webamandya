@@ -99,6 +99,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Galeri publik hasil booth, ditautkan dari section hasil di halaman sewa.
+  // Jangan tertukar dengan /gallery milik dasbor.
+  if (pathname === '/galeri') {
+    return NextResponse.next()
+  }
+
   // Galeri hasil yang dibuka tamu lewat QR: tanpa login.
   if (pathname.startsWith('/download')) {
     return NextResponse.next()

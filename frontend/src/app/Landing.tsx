@@ -251,6 +251,14 @@ export default function Landing() {
                 </div>
               </div>
             </div>
+
+            <a className="galeri-link" href="/galeri">
+              <span>
+                <b>Lihat galeri hasil booth</b>
+                <small>Strip foto, GIF, dan live photo asli dari tamu kami</small>
+              </span>
+              <span className="panah" aria-hidden="true">&rarr;</span>
+            </a>
           </div>
         </section>
 
@@ -369,6 +377,7 @@ export default function Landing() {
             </a>
             <a href="#paket">Paket sewa</a>
             <a href="#galeri">Hasil cetakan</a>
+            <a href="/galeri">Galeri hasil</a>
             <a href="#mesin">Spesifikasi unit</a>
           </div>
           <div className="col">

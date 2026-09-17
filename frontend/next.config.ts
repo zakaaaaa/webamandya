@@ -8,6 +8,13 @@ import type { NextConfig } from "next";
  */
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  images: {
+    // Strip hasil sesi di R2 berukuran 2-12 MB; /galeri memakai thumbnail
+    // hasil optimasi dari URL CDN, bukan salinan di repo.
+    remotePatterns: [
+      { protocol: 'https', hostname: 'cdn.pabrikenangan.my.id', pathname: '/results/**' },
+    ],
+  },
 };
 
 export default nextConfig;

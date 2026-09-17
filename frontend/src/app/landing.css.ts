@@ -419,6 +419,22 @@ p{margin:0}
 .media-live{aspect-ratio:460/688;border-radius:10px;box-shadow:var(--shadow-sm)}
 .media-live video{height:100%;object-fit:cover}
 
+/* Pintu ke /galeri, selebar grid hasil di atasnya. */
+.galeri-link{
+  margin-top:18px;display:flex;align-items:center;justify-content:space-between;gap:18px;
+  padding:18px 22px;border-radius:18px;text-decoration:none;
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-sm);
+  transition:border-color .18s,box-shadow .18s,transform .18s cubic-bezier(.34,1.4,.64,1);
+}
+.galeri-link:hover{border-color:var(--red);box-shadow:var(--shadow-md);transform:translateY(-2px)}
+.galeri-link b{display:block;font-size:16px;font-weight:800;letter-spacing:-.01em}
+.galeri-link small{display:block;margin-top:2px;font-size:13px;color:var(--ink-3)}
+.galeri-link .panah{
+  flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+  font-size:18px;color:#fff;background:linear-gradient(140deg,var(--red-light),var(--red-dark));
+  box-shadow:0 5px 18px rgba(212,43,34,.32);
+}
+
 /* ══════════ Datasheet mesin ══════════ */
 .sheet{
   display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:0;
