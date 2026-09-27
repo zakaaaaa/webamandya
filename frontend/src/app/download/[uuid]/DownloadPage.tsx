@@ -853,12 +853,22 @@ export default function DownloadPage({
 
           {/* ── HEADER ── */}
           <header className="rise" style={{ textAlign:'center', marginBottom:32 }}>
-            <img
-              src="/logo-pk.webp"
-              alt="Pabrik Kenangan"
-              width={196} height={110}
-              style={{ width:168, height:'auto', margin:'0 auto 20px', display:'block' }}
-            />
+            {/* Co-branding dengan mitra d'Logok */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:12, marginBottom:20 }}>
+              <img
+                src="/logo-pk.webp"
+                alt="Pabrik Kenangan"
+                width={196} height={110}
+                style={{ width:120, height:'auto', display:'block' }}
+              />
+              <span aria-hidden style={{ fontSize:18, fontWeight:600, color:'#C9B8B0' }}>×</span>
+              <img
+                src="/logo-dlogok.webp"
+                alt="d'Logok — Warmindo, Games and Working Space"
+                width={518} height={178}
+                style={{ width:136, height:'auto', display:'block' }}
+              />
+            </div>
             <h1 style={{ fontSize:'clamp(22px,5.2vw,30px)', fontWeight:800, letterSpacing:'-0.02em', lineHeight:1.25, marginBottom:8 }}>
               {allDone ? 'Foto kamu sudah siap' : 'Sedang menyiapkan hasil'}
             </h1>
