@@ -9,8 +9,9 @@ import {
   Sparkles, Clock, Hash, Percent, Gift, AlertCircle, Printer
 } from 'lucide-react'
 
+type JenisVoucher = 'cash'|'test'
 type Voucher = {
-  id: string; code: string; discount_type: 'full'|'percent'|'fixed'
+  id: string; code: string; kind: JenisVoucher; discount_type: 'full'|'percent'|'fixed'
   discount_value: number; max_uses: number|null; used_count: number
   valid_until: string|null; is_active: boolean; created_at: string; client_id: string
 }
@@ -19,6 +20,13 @@ type Props = {
   vouchers: Voucher[]; totalCount:number; totalPages:number; currentPage:number
   clientId:string; stats:Stats; filters:{ status:string; search:string }
 }
+
+// cash = pelanggan bayar tunai penuh ke operator → sesi lunas & masuk pendapatan.
+// test = gratis/potongan (uji coba, promo) → bukan pendapatan.
+const JENIS_VOUCHER: { val: JenisVoucher; label: string; hint: string }[] = [
+  { val:'cash', label:'💵 Cash', hint:'Pelanggan bayar tunai penuh ke operator. Sesi tercatat LUNAS dan masuk pendapatan.' },
+  { val:'test', label:'🧪 Test', hint:'Gratis / potongan untuk uji coba atau promo. Tidak dihitung sebagai pendapatan.' },
+]
 
 const generateCode = (prefix='') => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -41,8 +49,9 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
   const [success, setSuccess]     = useState('')
-  const [form, setForm]           = useState({ code:generateCode(), discount_type:'full' as any, discount_value:0, max_uses:1, valid_until:'', unlimited_uses:true, no_expiry:true })
-  const [bulk, setBulk]           = useState({ prefix:'', count:10, discount_type:'full' as any, discount_value:0, max_uses:1, valid_until:'', no_expiry:true })
+  const [form, setForm]           = useState({ code:generateCode(), kind:'cash' as JenisVoucher, discount_type:'full' as any, discount_value:0, max_uses:1, valid_until:'', unlimited_uses:true, no_expiry:true })
+  const [bulk, setBulk]           = useState({ prefix:'', count:10, kind:'cash' as JenisVoucher, discount_type:'full' as any, discount_value:0, max_uses:1, valid_until:'', no_expiry:true })
+  const [kindId, setKindId]       = useState<string|null>(null)
   const [printCodes, setPrintCodes] = useState<string[]>([])
   const [copiedId, setCopiedId]   = useState<string|null>(null)
   const [localSearch, setLocalSearch] = useState(filters.search)
@@ -71,9 +80,10 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
     setSaving(true); setError('')
     try {
       const { error:err } = await supabase.from('vouchers').insert({
-        code: form.code.trim().toUpperCase(), client_id: clientId,
-        discount_type: form.discount_type,
-        discount_value: form.discount_type==='full' ? 100 : form.discount_value,
+        code: form.code.trim().toUpperCase(), client_id: clientId, kind: form.kind,
+        // Voucher cash selalu menutup harga penuh (dibayar tunai); diskon hanya untuk test.
+        discount_type: form.kind==='cash' ? 'full' : form.discount_type,
+        discount_value: form.kind==='cash' || form.discount_type==='full' ? 100 : form.discount_value,
         max_uses: form.unlimited_uses ? null : form.max_uses,
         valid_until: form.no_expiry ? null : form.valid_until || null,
         is_active: true, used_count: 0,
@@ -91,8 +101,9 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
     try {
       const codes = generateBulkCodes(bulk.count, bulk.prefix)
       const { error:err } = await supabase.from('vouchers').insert(codes.map(code => ({
-        code, client_id:clientId, discount_type:bulk.discount_type,
-        discount_value: bulk.discount_type==='full'?100:bulk.discount_value,
+        code, client_id:clientId, kind:bulk.kind,
+        discount_type: bulk.kind==='cash' ? 'full' : bulk.discount_type,
+        discount_value: bulk.kind==='cash' || bulk.discount_type==='full' ? 100 : bulk.discount_value,
         max_uses:1, valid_until: bulk.no_expiry?null:bulk.valid_until||null,
         is_active:true, used_count:0,
       })))
@@ -109,6 +120,20 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
     setTogglingId(null); startTransition(()=>router.refresh())
   }
 
+  const handleKind = async (v:Voucher) => {
+    const baru: JenisVoucher = v.kind==='cash' ? 'test' : 'cash'
+    const pesan = baru==='cash'
+      ? `Jadikan ${v.code} voucher CASH? Pemakaian berikutnya tercatat lunas dan masuk pendapatan.`
+      : `Jadikan ${v.code} voucher TEST? Pemakaian berikutnya tidak dihitung sebagai pendapatan.`
+    if (!confirm(pesan)) return
+    setKindId(v.id)
+    // Voucher cash selalu menutup harga penuh.
+    await supabase.from('vouchers').update(
+      baru==='cash' ? { kind:baru, discount_type:'full', discount_value:100 } : { kind:baru }
+    ).eq('id',v.id)
+    setKindId(null); startTransition(()=>router.refresh())
+  }
+
   const handleDelete = async (id:string) => {
     if (!confirm('Hapus voucher ini?')) return
     setDeletingId(id)
@@ -120,7 +145,7 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
   const isExpired  = (v:Voucher) => v.valid_until && new Date(v.valid_until) < new Date()
   const isFull     = (v:Voucher) => v.max_uses !== null && v.used_count >= v.max_uses
 
-  const discountLabel = (v:Voucher) => v.discount_type==='full'?'GRATIS':v.discount_type==='percent'?`${v.discount_value}% OFF`:`Rp ${Number(v.discount_value).toLocaleString('id-ID')}`
+  const discountLabel = (v:Voucher) => v.kind==='cash'?'BAYAR TUNAI':v.discount_type==='full'?'GRATIS':v.discount_type==='percent'?`${v.discount_value}% OFF`:`Rp ${Number(v.discount_value).toLocaleString('id-ID')}`
   const discountColor = (v:Voucher) => v.discount_type==='full'
     ? { bg:'rgba(16,185,129,.12)',  color:'#059669', border:'rgba(16,185,129,.2)' }
     : v.discount_type==='percent'
@@ -243,13 +268,13 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
             <table style={{width:'100%',borderCollapse:'collapse',minWidth:860}}>
               <thead>
                 <tr style={{borderBottom:'1px solid rgba(212,43,34,0.05)'}}>
-                  {['Kode','Diskon','Pemakaian','Berlaku Hingga','Status','Dibuat','Aksi'].map(h=>(
+                  {['Kode','Jenis','Diskon','Pemakaian','Berlaku Hingga','Status','Dibuat','Aksi'].map(h=>(
                     <th key={h} style={{padding:'12px 18px',textAlign:'left',color:'rgba(158,136,128,0.95)',fontSize:10,fontWeight:600,letterSpacing:'1.5px',textTransform:'uppercase',fontFamily:'Poppins,sans-serif',whiteSpace:'nowrap'}}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {vouchers.length===0&&<tr><td colSpan={7} style={{padding:'60px 20px',textAlign:'center',color:'rgba(158,136,128,0.85)',fontSize:14}}>
+                {vouchers.length===0&&<tr><td colSpan={8} style={{padding:'60px 20px',textAlign:'center',color:'rgba(158,136,128,0.85)',fontSize:14}}>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:10}}><Ticket size={32} color="rgba(212,43,34,.3)"/>Belum ada voucher — buat sekarang!</div>
                 </td></tr>}
                 {vouchers.map(v=>{
@@ -263,6 +288,15 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
                             {copiedId===v.id?<Check size={13} color="#059669"/>:<Copy size={13}/>}
                           </button>
                         </div>
+                      </td>
+                      <td style={{padding:'14px 18px'}}>
+                        <button onClick={()=>handleKind(v)} disabled={kindId===v.id} title="Klik untuk mengganti jenis"
+                          style={{cursor:'pointer',borderRadius:7,padding:'3px 10px',fontSize:11,fontWeight:700,whiteSpace:'nowrap',opacity:kindId===v.id?.5:1,
+                            ...(v.kind==='cash'
+                              ? {background:'rgba(16,185,129,.12)',color:'#059669',border:'1px solid rgba(16,185,129,.25)'}
+                              : {background:'rgba(158,136,128,.12)',color:'rgba(74,46,34,0.8)',border:'1px solid rgba(158,136,128,.25)'})}}>
+                          {v.kind==='cash'?'💵 CASH':'🧪 TEST'}
+                        </button>
                       </td>
                       <td style={{padding:'14px 18px'}}>
                         <span style={{background:dc.bg,color:dc.color,border:`1px solid ${dc.border}`,borderRadius:7,padding:'3px 10px',fontSize:11,fontWeight:700}}>{discountLabel(v)}</span>
@@ -339,14 +373,23 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
               </div>
             </div>
             <div>
+              <label className="inp-label">Jenis Voucher</label>
+              <div className="seg">
+                {JENIS_VOUCHER.map(({val,label})=>(
+                  <button key={val} className={`seg-btn ${form.kind===val?'active':''}`} onClick={()=>setForm(f=>({...f,kind:val}))}>{label}</button>
+                ))}
+              </div>
+              <p style={{color:'rgba(122,98,89,0.85)',fontSize:11,marginTop:6}}>{JENIS_VOUCHER.find(j=>j.val===form.kind)?.hint}</p>
+            </div>
+            {form.kind==='test'&&<div>
               <label className="inp-label">Jenis Diskon</label>
               <div className="seg">
                 {[{val:'full',label:'🎁 Gratis 100%'},{val:'percent',label:'% Persen'},{val:'fixed',label:'Rp Nominal'}].map(({val,label})=>(
                   <button key={val} className={`seg-btn ${form.discount_type===val?'active':''}`} onClick={()=>setForm(f=>({...f,discount_type:val as any}))}>{label}</button>
                 ))}
               </div>
-            </div>
-            {form.discount_type!=='full'&&<div>
+            </div>}
+            {form.kind==='test'&&form.discount_type!=='full'&&<div>
               <label className="inp-label">{form.discount_type==='percent'?'Persen Diskon (%)':'Nominal Diskon (Rp)'}</label>
               <input className="inp" type="number" min={1} max={form.discount_type==='percent'?100:undefined} value={form.discount_value||''} onChange={e=>setForm(f=>({...f,discount_value:Number(e.target.value)}))} placeholder={form.discount_type==='percent'?'50':'10000'}/>
             </div>}
@@ -392,14 +435,23 @@ export default function VouchersClient({ vouchers, totalCount, totalPages, curre
               <div><label className="inp-label">Prefix (opsional)</label><input className="inp" value={bulk.prefix} placeholder="Misal: PROMO" onChange={e=>setBulk(b=>({...b,prefix:e.target.value.toUpperCase()}))}/></div>
             </div>
             <div>
+              <label className="inp-label">Jenis Voucher</label>
+              <div className="seg">
+                {JENIS_VOUCHER.map(({val,label})=>(
+                  <button key={val} className={`seg-btn ${bulk.kind===val?'active':''}`} onClick={()=>setBulk(b=>({...b,kind:val}))}>{label}</button>
+                ))}
+              </div>
+              <p style={{color:'rgba(122,98,89,0.85)',fontSize:11,marginTop:6}}>{JENIS_VOUCHER.find(j=>j.val===bulk.kind)?.hint}</p>
+            </div>
+            {bulk.kind==='test'&&<div>
               <label className="inp-label">Jenis Diskon</label>
               <div className="seg">
                 {[{val:'full',label:'🎁 Gratis 100%'},{val:'percent',label:'% Persen'},{val:'fixed',label:'Rp Nominal'}].map(({val,label})=>(
                   <button key={val} className={`seg-btn ${bulk.discount_type===val?'active':''}`} onClick={()=>setBulk(b=>({...b,discount_type:val as any}))}>{label}</button>
                 ))}
               </div>
-            </div>
-            {bulk.discount_type!=='full'&&<div>
+            </div>}
+            {bulk.kind==='test'&&bulk.discount_type!=='full'&&<div>
               <label className="inp-label">{bulk.discount_type==='percent'?'Persen (%)':'Nominal (Rp)'}</label>
               <input className="inp" type="number" min={1} value={bulk.discount_value||''} onChange={e=>setBulk(b=>({...b,discount_value:Number(e.target.value)}))}/>
             </div>}

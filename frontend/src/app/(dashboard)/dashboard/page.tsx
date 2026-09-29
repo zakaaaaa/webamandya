@@ -1,4 +1,5 @@
 import { ambilSesiAdmin } from '@/lib/admin-session'
+import { labelMetode } from '@/lib/metode-bayar'
 import { Users, Monitor, Receipt, TrendingUp, Shield, Activity } from 'lucide-react'
 import { HwidRow } from './HwidRow'
 import { awalHariJakarta, formatWaktu } from '@/lib/waktu'
@@ -426,7 +427,7 @@ export default async function DashboardPage() {
                             border: '1px solid rgba(212,43,34,0.14)', borderRadius: '8px',
                             padding: '4px 12px', fontSize: '12px', fontWeight: 700, textTransform: 'capitalize',
                           }}>
-                            {s.payment_method}
+                            {labelMetode(s.payment_method)}
                           </span>
                         </td>
                         <td style={{ padding: '14px 20px' }}>

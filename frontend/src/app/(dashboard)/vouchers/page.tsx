@@ -38,7 +38,7 @@ export default async function VouchersPage({
   ] = await Promise.all([
     supabase.from('vouchers').select('*', { count:'exact', head:true }).eq('client_id', clientId).eq('is_active', true),
     supabase.from('vouchers').select('*', { count:'exact', head:true }).eq('client_id', clientId).gt('used_count', 0),
-    supabase.from('sessions').select('id').eq('client_id', clientId).eq('payment_method', 'voucher')
+    supabase.from('sessions').select('id').eq('client_id', clientId).not('voucher_id', 'is', null)
       .gte('created_at', awalHariJakarta().toISOString()),
   ])
 

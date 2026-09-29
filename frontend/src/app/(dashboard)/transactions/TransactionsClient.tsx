@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useState, useTransition } from 'react'
+import { LABEL_METODE, labelMetode } from '@/lib/metode-bayar'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { formatWaktu, tanggalJakarta } from '@/lib/waktu'
@@ -55,10 +56,8 @@ const STATUS_OPTIONS = [
 ]
 
 const METHOD_OPTIONS = [
-  { value: '',        label: 'Semua metode' },
-  { value: 'qris',    label: 'QRIS' },
-  { value: 'voucher', label: 'Voucher' },
-  { value: 'bypass',  label: 'Bypass' },
+  { value: '', label: 'Semua metode' },
+  ...Object.entries(LABEL_METODE).map(([value, label]) => ({ value, label })),
 ]
 
 const rupiah = (n: number) => `Rp ${Number(n || 0).toLocaleString('id-ID')}`
@@ -431,7 +430,7 @@ export default function TransactionsClient({
                         <span style={{
                           background: 'rgba(212,43,34,0.07)', color: '#7A6259', border: '1px solid rgba(212,43,34,0.14)',
                           borderRadius: 8, padding: '4px 12px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase',
-                        }}>{s.payment_method}</span>
+                        }}>{labelMetode(s.payment_method)}</span>
                       </td>
                       <td style={{ padding: '14px 20px' }}>
                         <span style={{
