@@ -105,6 +105,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Halaman promo yang dibuka dari QR tent card di meja d'Logok. Sama seperti
+  // standee antrean: kartunya sudah tercetak, jadi path ini harus tetap publik.
+  if (pathname === '/dlogok') {
+    return NextResponse.next()
+  }
+
   // Galeri hasil yang dibuka tamu lewat QR: tanpa login.
   if (pathname.startsWith('/download')) {
     return NextResponse.next()
