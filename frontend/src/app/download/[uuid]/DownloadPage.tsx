@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Download, Check, Loader2, Film, Sparkles, AlertCircle, Printer, Bell, BellOff } from 'lucide-react'
+import { DOWNLOAD_CSS } from './download.css'
 
 // pending    = mesin belum mulai
 // processing = mesin sedang merender/mengunggah
@@ -90,52 +91,55 @@ const LAYOUTS: Record<number, {
   4: { topPadding:25,  bottomPadding:40,  leftPadding:10, rightPadding:5,  horizontalSpacing:5,  verticalSpacing:13,  cols:2 },
 }
 
-// ── Cincin progres ───────────────────────────────────────────────────────
-function ProgressRing({ percent, caption, hint }: { percent:number; caption:string; hint?:string }) {
-  const R = 46
-  const C = 2 * Math.PI * R
+// ── Progres media: foto yang pelan-pelan "muncul" ────────────────────────
+// Angkanya tetap dari kalibrasi di atas; fotonya bergerak dari buram & gelap
+// ke jelas mengikuti persentase, supaya menunggu terasa bagian dari hasilnya.
+function DevelopingCard({
+  percent, caption, hint, photoUrl, steps, currentKey,
+}: {
+  percent:number; caption:string; hint?:string; photoUrl:string|null
+  steps:{ key:string; label:string; done:boolean }[]; currentKey?:string
+}) {
+  const p = percent / 100
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14 }}>
-      <div style={{ position:'relative', width:120, height:120 }}>
-        <svg width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
-          <defs>
-            <linearGradient id="pk-ring" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%"   stopColor="#E83530"/>
-              <stop offset="100%" stopColor="#C02018"/>
-            </linearGradient>
-          </defs>
-          <circle cx="60" cy="60" r={R} fill="none" stroke="rgba(212,43,34,0.12)" strokeWidth="8"/>
-          <circle
-            cx="60" cy="60" r={R} fill="none"
-            stroke="url(#pk-ring)" strokeWidth="8" strokeLinecap="round"
-            strokeDasharray={C}
-            strokeDashoffset={C * (1 - percent / 100)}
-            transform="rotate(-90 60 60)"
-            style={{ transition:'stroke-dashoffset .7s cubic-bezier(.4,0,.2,1)' }}
-          />
-        </svg>
-        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <span style={{ fontSize:26, fontWeight:800, color:'#150C09', letterSpacing:'-0.02em', lineHeight:1 }}>
-            {percent}<span style={{ fontSize:14, fontWeight:700, color:'#9E8880' }}>%</span>
-          </span>
+    <div className="kartu masuk-2">
+      <div className="muncul">
+        <div className="muncul-foto">
+          <div className="gbr">
+            {photoUrl && (
+              <img src={photoUrl} alt="" style={{
+                opacity: 0.08 + p * 0.92,
+                filter:`sepia(${(1 - p).toFixed(2)}) blur(${((1 - p) * 5).toFixed(1)}px) brightness(${(0.45 + p * 0.55).toFixed(2)})`,
+              }}/>
+            )}
+          </div>
+          <p className="persen">{percent}%</p>
+        </div>
+        <div style={{ minWidth:0 }}>
+          <h3>{caption}</h3>
+          {hint && <p className="teks">{hint}</p>}
         </div>
       </div>
-      <div style={{ textAlign:'center' }}>
-        <p style={{ fontSize:14, fontWeight:600, color:'#150C09', marginBottom:4 }}>{caption}</p>
-        {hint && <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.55, maxWidth:290, margin:'0 auto' }}>{hint}</p>}
-      </div>
+      <ul className="langkah">
+        {steps.map(s => (
+          <li key={s.key} className={s.done ? 'selesai' : s.key === currentKey ? 'jalan' : ''}>
+            {s.done ? <Check size={12} strokeWidth={3.5}/> : s.key === currentKey ? <Loader2 size={11} className="muter"/> : null}
+            {s.label}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
 
-// ── Kartu progres CETAK ──────────────────────────────────────────────────
-// Sengaja batang, bukan cincin: supaya tidak tertukar dengan cincin media di
-// atasnya. Kalimatnya juga sengaja tidak pernah mengklaim "kertas sudah
-// keluar" — yang diketahui mesin adalah data cetakan sudah habis diterima
-// printer, dan lembar fisiknya menyusul beberapa detik kemudian.
+// ── Printer & lembar yang keluar ─────────────────────────────────────────
+// Lembar turun dari mulut printer mengikuti persentase cetak (digerakkan
+// waktu terhadap print_eta_seconds, berlantai lembar yang sudah lepas dari
+// antrian). Kalimatnya tetap tidak mengklaim "kertas sudah keluar" sebelum
+// mesin melaporkan selesai.
 function PrintCard({
   status, sheetsDone, sheetsTotal, percent, remainSec, reason,
-  soundArmed, onArmSound,
+  soundArmed, onArmSound, sheetSrc, photoUrls, justDone,
 }: {
   status: PrintStatus
   sheetsDone: number
@@ -145,100 +149,109 @@ function PrintCard({
   reason: string | null
   soundArmed: boolean
   onArmSound: () => void
+  sheetSrc: string | null
+  photoUrls: string[]
+  justDone: boolean
 }) {
   if (!status) return null
 
-  const running  = status === 'queued' || status === 'printing'
-  const trouble  = status === 'stuck' || status === 'failed'
-  const multi    = sheetsTotal > 1
+  const running = status === 'queued' || status === 'printing'
+  const trouble = status === 'stuck' || status === 'failed'
+  const done    = status === 'done'
+  const total   = Math.max(1, sheetsTotal)
+  const multi   = sheetsTotal > 1
 
-  const accent = status === 'done' ? '#1E7A4B' : trouble ? '#B4541C' : '#C02018'
-  const bg     = status === 'done' ? 'rgba(30,122,75,0.08)'
-               : trouble ? 'rgba(180,84,28,0.09)' : 'rgba(212,43,34,0.08)'
+  const sheet = (
+    <div className="lembar">
+      {sheetSrc
+        ? <img src={sheetSrc} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+        : <div className="lembar-grid">{photoUrls.slice(0, 4).flatMap(u => [u, u]).slice(0, 8).map((u, i) => (
+            <img key={i} src={u} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'center top' }}/>
+          ))}</div>}
+    </div>
+  )
 
-  const title = status === 'done'  ? 'Cetakan sudah selesai'
-              : status === 'stuck' ? 'Cetakan tertahan'
-              : status === 'failed'? 'Cetakan belum selesai'
-              : status === 'queued'? 'Cetakan masuk antrian'
-              :                      'Sedang mencetak'
-
-  const sisa = remainSec == null ? null
-    : remainSec > 90 ? `sekitar ${Math.round(remainSec / 60)} menit lagi`
-    : remainSec > 20 ? `sekitar ${Math.round(remainSec / 10) * 10} detik lagi`
-    :                  'sebentar lagi'
-
-  const body = status === 'done'
-      ? (multi
-          ? `${sheetsTotal} lembar sudah dicetak. Silakan ambil di printer.`
-          : 'Silakan ambil hasil cetakmu di printer.')
-    : trouble
-      ? (reason ?? 'Cetakan berhenti sebelum selesai.') + ' Tunjukkan layar ini ke petugas di lokasi.'
-    : (multi ? `Lembar ${Math.min(sheetsDone + 1, sheetsTotal)} dari ${sheetsTotal}. ` : '')
-      + (sisa ? `Perkiraan ${sisa}. ` : '')
-      + 'Kamu boleh duduk dulu — halaman ini yang akan memberi tahu.'
-
-  return (
-    <div className="card rise-2" style={{ padding:'20px 20px 18px', marginTop:16 }}>
-      <div style={{ display:'flex', alignItems:'flex-start', gap:14 }}>
-        <span style={{
-          flexShrink:0, width:38, height:38, borderRadius:12, background:bg,
-          display:'inline-flex', alignItems:'center', justifyContent:'center', color:accent,
-        }}>
-          {status === 'done'
-            ? <Check size={19} strokeWidth={3}/>
-            : trouble
-              ? <AlertCircle size={19}/>
-              : <Printer size={19}/>}
-        </span>
-
-        <div style={{ flex:1, minWidth:0 }}>
-          <p style={{ fontSize:14.5, fontWeight:700, color:'#150C09', marginBottom:3 }}>
-            {title}
-          </p>
-          <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.6 }}>{body}</p>
-
-          {running && (
-            <div style={{
-              marginTop:12, height:7, borderRadius:99,
-              background:'rgba(212,43,34,0.10)', overflow:'hidden',
-            }}>
-              <div style={{
-                width:`${percent}%`, height:'100%', borderRadius:99,
-                background:'linear-gradient(90deg,#E83530,#C02018)',
-                transition:'width .8s cubic-bezier(.4,0,.2,1)',
-              }}/>
-            </div>
-          )}
-
-          {/* Browser memblokir suara yang tidak berasal dari sentuhan
-              pelanggan, jadi izinnya harus diminta SEKARANG — selagi
-              cetakan masih jalan — bukan nanti saat sudah selesai. */}
-          {running && (
-            <button
-              onClick={onArmSound}
-              disabled={soundArmed}
-              style={{
-                marginTop:14, display:'inline-flex', alignItems:'center', gap:7,
-                padding:'8px 13px', borderRadius:99, cursor: soundArmed ? 'default' : 'pointer',
-                border:`1px solid ${soundArmed ? 'rgba(30,122,75,0.25)' : 'rgba(212,43,34,0.22)'}`,
-                background: soundArmed ? 'rgba(30,122,75,0.07)' : '#fff',
-                color: soundArmed ? '#1E7A4B' : '#C02018',
-                fontSize:12, fontWeight:600, fontFamily:'inherit',
-              }}
-            >
-              {soundArmed ? <Bell size={13}/> : <BellOff size={13}/>}
-              {soundArmed ? 'Nanti dibunyikan saat selesai' : 'Bunyikan saat selesai'}
-            </button>
-          )}
-
-          {running && soundArmed && (
-            <p style={{ fontSize:11.5, color:'#B0A09A', lineHeight:1.55, marginTop:8 }}>
-              Biarkan halaman ini terbuka. Kalau layar HP terkunci, bunyinya
-              bisa ikut tertahan — statusnya tetap benar begitu HP dibuka lagi.
-            </p>
-          )}
+  // Ringkas: halaman dibuka ulang lama setelah cetakan selesai.
+  if (done && !justDone) {
+    return (
+      <div className="kartu cetak-ringkas masuk-2">
+        <div className="mini">{sheet}</div>
+        <div style={{ minWidth:0 }}>
+          <h3 className="lab">Cetakan sudah selesai</h3>
+          <p className="teks">{multi ? `${sheetsTotal} lembar sudah dicetak. ` : ''}Belum diambil? Cek di printer, ya.</p>
         </div>
       </div>
+    )
+  }
+
+  const p      = done ? 1 : percent / 100
+  const idx    = done ? total - 1 : Math.min(total - 1, Math.max(sheetsDone, Math.floor(p * total)))
+  const within = done ? 1 : Math.max(status === 'queued' ? 0.02 : 0.05, Math.min(1, p * total - idx))
+
+  const sisa = remainSec == null ? null
+    : remainSec > 90 ? `±${Math.round(remainSec / 60)} menit lagi`
+    : remainSec > 20 ? `±${Math.round(remainSec / 10) * 10} detik lagi`
+    :                  'sedikit lagi'
+
+  // Teks Bristol: tanpa huruf "b" (lihat download.css.ts).
+  const title = done              ? 'Sudah tercetak!'
+              : status === 'stuck'  ? 'Cetakan tertahan'
+              : status === 'failed' ? 'Cetakan terhenti'
+              : status === 'queued' ? 'Masuk antrean…'
+              :                       'Lagi dicetak…'
+
+  const body = done
+      ? (multi ? `${sheetsTotal} lembar sudah keluar. ` : '') + 'Silakan ambil hasil cetakmu di printer.'
+    : trouble
+      ? (reason ?? 'Cetakan berhenti sebelum selesai.') + ' Tunjukkan layar ini ke petugas di lokasi.'
+    : 'Kamu boleh duduk dulu — halaman ini yang akan memberi tahu.'
+
+  return (
+    <div className="cetak masuk-2">
+      <div className={`printer ${running ? 'jalan' : ''}`}>
+        <div className="printer-baki"><span/></div>
+        <div className="printer-badan">
+          <div className="printer-layar lab">{done ? 'OK' : trouble ? '!' : `${percent}%`}</div>
+          <span className="printer-merk lab">PK·PRINT</span>
+          <span className={`led ${done ? 'ok' : trouble ? 'awas' : 'jalan'}`}/>
+          <div className="printer-mulut"/>
+        </div>
+        <div className="keluar">
+          <div className="keluar-bayang" aria-hidden><span className="lab">keluar di sini</span></div>
+          <div className="lembar-gerak" style={{ transform:`translateY(${(-(1 - within) * 100).toFixed(2)}%)` }}>
+            {sheet}
+          </div>
+        </div>
+        {(done || trouble) && (
+          <div className={`stiker st-ambil ${trouble ? 'awas' : ''}`}>
+            <div className="stiker-isi">
+              <span className="lab">{done ? 'Ambil di' : 'Panggil'}</span>
+              <span className="disp">{done ? 'printer!' : 'petugas'}</span>
+            </div>
+          </div>
+        )}
+        {multi && <span className="hitung-lembar lab">lembar {Math.min(idx + 1, total)}/{total}</span>}
+      </div>
+
+      <h2 className={`cetak-judul ${done ? 'ok' : ''}`}>{title}</h2>
+      {running && <p className="cetak-angka lab">{percent}%{sisa ? ` · ${sisa}` : ''}</p>}
+      <p className="cetak-ket teks">{body}</p>
+
+      {/* Browser memblokir suara yang tidak berasal dari sentuhan
+          pelanggan, jadi izinnya harus diminta SEKARANG — selagi
+          cetakan masih jalan — bukan nanti saat sudah selesai. */}
+      {running && (
+        <button className={`tombol garis kecil bunyi ${soundArmed ? 'siap' : ''}`} onClick={onArmSound} disabled={soundArmed}>
+          {soundArmed ? <Bell size={14}/> : <BellOff size={14}/>}
+          {soundArmed ? 'Nanti dibunyikan' : 'Bunyikan saat selesai'}
+        </button>
+      )}
+      {running && soundArmed && (
+        <p className="teks" style={{ fontSize:12, color:'rgba(252,233,206,.7)', lineHeight:1.5, margin:'10px auto 0', maxWidth:300 }}>
+          Biarkan halaman ini terbuka. Kalau layar HP terkunci, bunyinya
+          bisa ikut tertahan — statusnya tetap benar begitu HP dibuka lagi.
+        </p>
+      )}
     </div>
   )
 }
@@ -246,13 +259,9 @@ function PrintCard({
 // ── Satu blok hasil ──────────────────────────────────────────────────────
 function Section({ title, meta, children }: { title:string; meta?:string; children:React.ReactNode }) {
   return (
-    <section style={{ marginTop:36 }}>
-      <div style={{ display:'flex', alignItems:'baseline', gap:10, marginBottom:14, flexWrap:'wrap' }}>
-        <h2 style={{ fontSize:13, fontWeight:700, color:'#4A2E22', letterSpacing:'0.08em', textTransform:'uppercase' }}>
-          {title}
-        </h2>
-        {meta && <span style={{ fontSize:12, color:'#B0A09A' }}>{meta}</span>}
-      </div>
+    <section className="blok">
+      <h2 className="sub-judul">{title}</h2>
+      {meta && <span className="sub-ket lab">{meta}</span>}
       {children}
     </section>
   )
@@ -665,8 +674,13 @@ export default function DownloadPage({
     setDownloading(null)
   }
 
-  const formatDate = (d:string) =>
-    new Date(d).toLocaleString('id-ID', { dateStyle:'long', timeStyle:'short', timeZone:'Asia/Jakarta' })
+  // Cap tanggal satu baris, mis. "20 Sep 2026 · 21.25 WIB".
+  const formatDate = (d:string) => {
+    const t = new Date(d)
+    const tgl = t.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric', timeZone:'Asia/Jakarta' })
+    const jam = t.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', timeZone:'Asia/Jakarta' })
+    return `${tgl} · ${jam} WIB`
+  }
 
   const busy = (key:string) => downloading === key
 
@@ -745,143 +759,42 @@ export default function DownloadPage({
     </div>
   )
 
+  const gifBusyServer = media.gif_status === 'processing' || media.gif_status === 'pending'
+  const gifPreviewSrc = effectiveGifUrl ?? photos[gifFrame]?.photo_url ?? null
+
   return (
     <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
-        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:'Poppins',sans-serif;background:#FAF7F5;color:#150C09;overflow-x:hidden}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes soft-in{from{opacity:0}to{opacity:1}}
-        .rise{animation:rise .5s ease both}
-        .rise-2{animation:rise .5s ease .08s both}
-        .rise-3{animation:rise .5s ease .16s both}
-        @media (prefers-reduced-motion: reduce){ .rise,.rise-2,.rise-3{animation:none} }
+      <style>{DOWNLOAD_CSS}</style>
 
-        .wrap{max-width:560px;margin:0 auto;padding:40px 20px 72px}
-        @media (max-width:520px){ .wrap{padding:28px 16px 56px} }
+      <div className="dw">
+        <div className="sinar" aria-hidden/>
+        <div className="isi">
 
-        /* Kartu: satu garis tipis, tanpa bayangan berat. */
-        .card{background:#fff;border:1px solid rgba(212,43,34,0.10);border-radius:18px}
-
-        .btn{
-          display:flex;align-items:center;justify-content:center;gap:9px;
-          width:100%;padding:14px 18px;border-radius:14px;border:1px solid transparent;
-          font-family:'Poppins',sans-serif;font-size:14px;font-weight:600;cursor:pointer;
-          transition:filter .2s,transform .12s,background .2s;
-        }
-        .btn:active:not(:disabled){transform:translateY(1px)}
-        .btn:disabled{opacity:.55;cursor:default}
-        .btn-primary{background:linear-gradient(135deg,#E83530,#C02018);color:#fff;box-shadow:0 6px 18px rgba(212,43,34,.24)}
-        .btn-primary:hover:not(:disabled){filter:brightness(1.06)}
-        .btn-ghost{background:#fff;border-color:rgba(212,43,34,0.18);color:#C02018}
-        .btn-ghost:hover:not(:disabled){background:rgba(212,43,34,0.045)}
-        .btn:focus-visible,.row-btn:focus-visible,.thumb-dl:focus-visible{outline:2px solid #D42B22;outline-offset:2px}
-
-        .row{display:flex;align-items:center;gap:14px;padding:14px 16px}
-        .row-icon{
-          width:38px;height:38px;border-radius:11px;flex-shrink:0;overflow:hidden;
-          display:flex;align-items:center;justify-content:center;
-          background:rgba(212,43,34,0.07);color:#D42B22;
-        }
-        .row-btn{
-          flex-shrink:0;display:flex;align-items:center;justify-content:center;gap:7px;
-          padding:10px 14px;border-radius:11px;cursor:pointer;border:none;
-          background:linear-gradient(135deg,#E83530,#C02018);color:#fff;
-          font-family:'Poppins',sans-serif;font-size:12.5px;font-weight:600;
-        }
-        .row-btn:disabled{opacity:.6;cursor:default}
-        .row-btn.ghost{background:#fff;border:1px solid rgba(212,43,34,0.2);color:#C02018}
-
-        .photo-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-        @media (max-width:420px){ .photo-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px} }
-        .thumb{
-          position:relative;border-radius:12px;overflow:hidden;cursor:zoom-in;
-          border:1px solid rgba(212,43,34,0.10);background:#fff;
-        }
-        .thumb img{width:100%;aspect-ratio:1;object-fit:cover;object-position:center top;display:block}
-        .thumb-dl{
-          position:absolute;right:6px;bottom:6px;
-          width:28px;height:28px;border-radius:9px;border:none;cursor:pointer;
-          display:flex;align-items:center;justify-content:center;
-          background:rgba(21,12,9,.62);color:#fff;backdrop-filter:blur(4px);
-        }
-
-        /* ── Formulir pengaduan ── */
-        .field{
-          width:100%;padding:12px 14px;border-radius:12px;
-          border:1px solid rgba(212,43,34,0.18);background:#fff;color:#150C09;
-          font-family:'Poppins',sans-serif;font-size:14px;outline:none;
-          transition:border-color .2s,box-shadow .2s;
-        }
-        .field::placeholder{color:#C7B8B2}
-        .field:focus{border-color:#D42B22;box-shadow:0 0 0 3px rgba(212,43,34,.10)}
-        .field-label{
-          display:block;font-size:11.5px;font-weight:700;color:#7A6259;
-          letter-spacing:.06em;text-transform:uppercase;margin-bottom:7px;
-        }
-        .chip{
-          padding:9px 14px;border-radius:11px;cursor:pointer;
-          border:1px solid rgba(212,43,34,0.18);background:#fff;color:#7A6259;
-          font-family:'Poppins',sans-serif;font-size:12.5px;font-weight:600;
-        }
-        .chip.active{background:rgba(212,43,34,.08);border-color:#D42B22;color:#C02018}
-        .chip:focus-visible{outline:2px solid #D42B22;outline-offset:2px}
-
-        .modal-scrim{
-          position:fixed;inset:0;z-index:150;padding:20px;
-          background:rgba(21,12,9,.55);backdrop-filter:blur(6px);
-          display:flex;align-items:center;justify-content:center;
-          animation:soft-in .15s ease both;
-        }
-        .modal-box{
-          width:100%;max-width:420px;background:#fff;border-radius:20px;
-          border:1px solid rgba(212,43,34,0.12);
-          max-height:min(88vh,88dvh);overflow-y:auto;
-          padding:26px 22px;animation:rise .25s ease both;
-        }
-        @media (max-width:420px){ .modal-box{padding:22px 18px} }
-
-        .lb{animation:soft-in .15s ease both}
-        ::-webkit-scrollbar{width:5px;height:5px}
-        ::-webkit-scrollbar-thumb{background:rgba(212,43,34,0.18);border-radius:3px}
-      `}</style>
-
-      <div style={{ minHeight:'100dvh', background:'#FAF7F5' }}>
-        <div className="wrap">
-
-          {/* ── HEADER ── */}
-          <header className="rise" style={{ textAlign:'center', marginBottom:32 }}>
+          {/* ── KEPALA ── */}
+          <header className="kepala">
             {/* Co-branding dengan mitra d'Logok */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:12, marginBottom:20 }}>
-              <img
-                src="/logo-pk.webp"
-                alt="Pabrik Kenangan"
-                width={196} height={110}
-                style={{ width:120, height:'auto', display:'block' }}
-              />
-              <span aria-hidden style={{ fontSize:18, fontWeight:600, color:'#C9B8B0' }}>×</span>
-              <img
-                src="/logo-dlogok.webp"
-                alt="d'Logok — Warmindo, Games and Working Space"
-                width={518} height={178}
-                style={{ width:136, height:'auto', display:'block' }}
-              />
+            <div className="logo-duo">
+              <img className="logo-pk" src="/dlogok/logo-pk.webp" alt="Pabrik Kenangan"/>
+              <span className="kali" aria-hidden>×</span>
+              <img className="logo-dl" src="/dlogok/logo-dlogok-putih.webp" alt="d'Logok — Warmindo, Games and Working Space"/>
             </div>
-            <h1 style={{ fontSize:'clamp(22px,5.2vw,30px)', fontWeight:800, letterSpacing:'-0.02em', lineHeight:1.25, marginBottom:8 }}>
-              {allDone ? 'Foto kamu sudah siap' : 'Sedang menyiapkan hasil'}
+            {/* Teks Bristol: tanpa huruf "b". */}
+            <h1 className="judul">
+              {allDone
+                ? <><span>Fotomu</span><span>sudah jadi!</span></>
+                : <><span>Lagi</span><span>disiapin…</span></>}
             </h1>
-            <p style={{ fontSize:13.5, color:'#9E8880' }}>
-              {formatDate(session.created_at)} · {clientName}
-            </p>
+            <span className="tanggal lab">{formatDate(session.created_at)}</span>
           </header>
 
-          {/* ── PROGRES ── */}
+          {/* ── PROGRES MEDIA ── */}
           {stillWorking && (
-            <div className="card rise-2" style={{ padding:'28px 20px' }}>
-              <ProgressRing
+            <div style={{ marginTop:28 }}>
+              <DevelopingCard
                 percent={percent}
+                photoUrl={photos[0]?.photo_url ?? null}
+                steps={steps}
+                currentKey={currentStep?.key}
                 caption={
                   takingLong
                     ? 'Agak lebih lama dari biasanya'
@@ -895,277 +808,224 @@ export default function DownloadPage({
                     : 'Biasanya sekitar 30 detik. Halaman ini memperbarui dirinya sendiri.'
                 }
               />
-
-              {/* Langkah nyata — inilah yang mengunci angka di cincin. */}
-              <div style={{
-                display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'8px 16px',
-                marginTop:22, paddingTop:18, borderTop:'1px solid rgba(212,43,34,0.08)',
-              }}>
-                {steps.map(s => (
-                  <span key={s.key} style={{
-                    display:'inline-flex', alignItems:'center', gap:6,
-                    fontSize:12, fontWeight: s.done ? 600 : 500,
-                    color: s.done ? '#1E7A4B' : '#B0A09A',
-                  }}>
-                    {s.done
-                      ? <Check size={13} strokeWidth={3}/>
-                      : s === currentStep
-                        ? <Loader2 size={13} style={{ animation:'spin .9s linear infinite' }}/>
-                        : <span style={{ width:7, height:7, borderRadius:'50%', background:'currentColor', opacity:.45 }}/>}
-                    {s.label}
-                  </span>
-                ))}
-              </div>
             </div>
           )}
 
           {/* ── PROGRES CETAK ── */}
-          <PrintCard
-            status={printState.status}
-            sheetsDone={printState.sheetsDone}
-            sheetsTotal={printState.sheetsTotal}
-            percent={printPercent}
-            remainSec={printRemain}
-            reason={printState.reason}
-            soundArmed={soundArmed}
-            onArmSound={armSound}
-          />
+          {printState.status && (
+            <div style={{ marginTop:32 }}>
+              <PrintCard
+                status={printState.status}
+                sheetsDone={printState.sheetsDone}
+                sheetsTotal={printState.sheetsTotal}
+                percent={printPercent}
+                remainSec={printRemain}
+                reason={printState.reason}
+                soundArmed={soundArmed}
+                onArmSound={armSound}
+                sheetSrc={media.result_url}
+                photoUrls={photos.map(p => p.photo_url)}
+                justDone={printJustDone}
+              />
+            </div>
+          )}
 
           {/* ── PHOTO STRIP ── */}
           <Section title="Photo strip" meta={media.result_url ? 'hasil final dengan frame' : 'pratinjau sementara'}>
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
-              {media.result_url ? (
-                <button
-                  onClick={()=>setLightbox(media.result_url!)}
-                  style={{
-                    padding:0, border:'1px solid rgba(212,43,34,0.10)', borderRadius:16,
-                    overflow:'hidden', cursor:'zoom-in', background:'#fff',
-                    maxWidth:previewW, width:'100%', display:'block',
-                  }}>
-                  <img src={media.result_url} alt="Photo strip" style={{ width:'100%', display:'block' }}/>
+            {media.result_url ? (
+              <div className="utama" style={{ maxWidth:previewW + 20 }}>
+                <div className="stiker st-hasil" aria-hidden>
+                  <div className="stiker-isi"><span className="lab">Siap</span><span className="disp">simpan!</span></div>
+                </div>
+                <button onClick={()=>setLightbox(media.result_url!)} aria-label="Perbesar photo strip">
+                  <img src={media.result_url} alt="Photo strip"/>
                 </button>
-              ) : photos.length > 0 ? (
-                <div style={{
-                  width:previewW, height:previewH, overflow:'hidden',
-                  border:'1px solid rgba(212,43,34,0.10)', borderRadius:16,
-                }}>
+              </div>
+            ) : photos.length > 0 ? (
+              <div className="utama" style={{ width:previewW + 20 }}>
+                <div style={{ width:previewW, height:previewH, overflow:'hidden', borderRadius:4 }}>
                   <div style={{ transform:`scale(${previewScale})`, transformOrigin:'top left' }}>
                     <StripPreview/>
                   </div>
                 </div>
-              ) : (
-                <div className="card" style={{ padding:'44px 20px', textAlign:'center', width:'100%' }}>
-                  <Loader2 size={22} color="#D42B22" style={{ animation:'spin .9s linear infinite' }}/>
-                  <p style={{ marginTop:10, fontSize:13, color:'#9E8880' }}>Foto belum masuk</p>
-                </div>
-              )}
+              </div>
+            ) : (
+              <div className="kartu" style={{ marginTop:20, padding:'40px 20px', textAlign:'center' }}>
+                <Loader2 size={24} className="muter" style={{ margin:'0 auto' }}/>
+                <p className="lab" style={{ marginTop:10, fontSize:12 }}>Foto belum masuk</p>
+              </div>
+            )}
 
-              <button
-                className="btn btn-primary"
-                disabled={!media.result_url || busy('strip')}
-                onClick={()=>handleDownload(media.result_url!, `photobooth_strip_${uuid.slice(0,8)}.png`, 'strip')}
-                style={{ maxWidth:previewW }}>
-                {busy('strip')
-                  ? <><Loader2 size={16} style={{ animation:'spin .8s linear infinite' }}/>Mengunduh…</>
-                  : media.result_url
-                    ? <><Download size={16}/>Download strip</>
-                    : <><Loader2 size={16} style={{ animation:'spin .9s linear infinite' }}/>Menunggu strip</>}
-              </button>
-            </div>
+            <button
+              className="tombol kuning"
+              style={{ marginTop:26 }}
+              disabled={!media.result_url || busy('strip')}
+              onClick={()=>handleDownload(media.result_url!, `photobooth_strip_${uuid.slice(0,8)}.png`, 'strip')}>
+              {busy('strip')
+                ? <><Loader2 size={18} className="muter"/>Mengunduh…</>
+                : media.result_url
+                  ? <><Download size={18}/>Simpan photo strip</>
+                  : <><Loader2 size={18} className="muter"/>Menunggu strip</>}
+            </button>
           </Section>
 
           {/* ── FOTO ASLI ── */}
           {photos.length > 0 && (
             <Section title="Foto asli" meta={`${photos.length} foto tanpa frame`}>
-              <div className="photo-grid">
+              <div className="kisi">
                 {photos.map((p,i)=>(
-                  <div key={i} className="thumb" onClick={()=>setLightbox(p.photo_url)}>
+                  <figure key={i} className="foto" onClick={()=>setLightbox(p.photo_url)}>
                     <img src={p.photo_url} alt={`Foto ${i+1}`}/>
+                    <figcaption className="lab">Foto {i+1}</figcaption>
                     <button
-                      className="thumb-dl"
+                      className="unduh-bulat"
                       aria-label={`Simpan foto ${i+1}`}
                       onClick={e=>{ e.stopPropagation(); handleDownload(p.photo_url, `foto_${i+1}_${uuid.slice(0,8)}.jpg`, `photo_${i}`) }}>
-                      {busy(`photo_${i}`)
-                        ? <Loader2 size={13} style={{ animation:'spin .8s linear infinite' }}/>
-                        : <Download size={13}/>}
+                      {busy(`photo_${i}`) ? <Loader2 size={16} className="muter"/> : <Download size={16}/>}
                     </button>
-                  </div>
+                  </figure>
                 ))}
               </div>
               <button
-                className="btn btn-ghost"
-                style={{ marginTop:12 }}
+                className="tombol garis"
+                style={{ marginTop:22 }}
                 disabled={busy('all-photos')}
                 onClick={downloadAllPhotos}>
                 {busy('all-photos')
-                  ? <><Loader2 size={15} style={{ animation:'spin .8s linear infinite' }}/>Mengunduh {photos.length} foto…</>
-                  : <><Download size={15}/>Download semua foto</>}
+                  ? <><Loader2 size={16} className="muter"/>Mengunduh {photos.length} foto…</>
+                  : <><Download size={16}/>Simpan semua foto</>}
               </button>
             </Section>
           )}
 
           {/* ── GIF & VIDEO ── */}
           {(photoCount > 1 || media.video_status != null) && (
-            <Section title="Lainnya">
-              <div className="card" style={{ overflow:'hidden' }}>
+            <Section title="GIF & video">
+              <div className="duo">
 
                 {/* GIF */}
                 {photoCount > 1 && (
-                  <div className="row">
-                    <div className="row-icon">
+                  <figure className="kartu media">
+                    <div className="media-isi" style={{ cursor: effectiveGifUrl ? 'zoom-in' : 'default' }}
+                      onClick={()=> effectiveGifUrl && setLightbox(effectiveGifUrl)}>
+                      {gifPreviewSrc ? <img src={gifPreviewSrc} alt="GIF animasi"/> : <Sparkles size={22}/>}
+                    </div>
+                    <h3 className="lab">GIF animasi</h3>
+                    <p className="teks">
                       {effectiveGifUrl
-                        ? <img src={effectiveGifUrl} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
-                        : photos[gifFrame]
-                          ? <img src={photos[gifFrame].photo_url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
-                          : <Sparkles size={17}/>}
-                    </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <p style={{ fontSize:13.5, fontWeight:600, marginBottom:2 }}>GIF animasi</p>
-                      <p style={{ fontSize:11.5, color:'#9E8880' }}>
-                        {effectiveGifUrl
-                          ? (serverGifUrl ? 'Dibuat di mesin photobooth' : 'Dibuat di HP kamu')
-                          : gifLoading
-                            ? `Membuat di HP kamu… ${gifProgress}%`
-                            : gifError
-                              ? gifError
-                              : (media.gif_status === 'processing' || media.gif_status === 'pending')
-                                ? 'Sedang dibuat di mesin'
-                                : 'Bisa dirakit langsung di HP'}
-                      </p>
-                    </div>
+                        ? (serverGifUrl ? 'Dibuat di mesin photobooth' : 'Dibuat di HP kamu')
+                        : gifLoading
+                          ? `Membuat di HP kamu… ${gifProgress}%`
+                          : gifError
+                            ? gifError
+                            : gifBusyServer
+                              ? 'Sedang dibuat di mesin'
+                              : 'Bisa dirakit langsung di HP'}
+                    </p>
                     {effectiveGifUrl ? (
-                      <button className="row-btn" disabled={busy('gif')}
+                      <button className="tombol merah kecil" disabled={busy('gif')}
                         onClick={()=>handleDownload(effectiveGifUrl, `photobooth_gif_${uuid.slice(0,8)}.gif`, 'gif')}>
-                        {busy('gif')
-                          ? <Loader2 size={13} style={{ animation:'spin .8s linear infinite' }}/>
-                          : <Download size={13}/>}
-                        Simpan
+                        {busy('gif') ? <Loader2 size={14} className="muter"/> : <Download size={14}/>}Simpan
                       </button>
                     ) : gifLoading ? (
-                      <button className="row-btn ghost" disabled>
-                        <Loader2 size={13} style={{ animation:'spin .8s linear infinite' }}/>{gifProgress}%
-                      </button>
-                    ) : (media.gif_status === 'processing' || media.gif_status === 'pending') ? (
-                      <button className="row-btn ghost" disabled>
-                        <Loader2 size={13} style={{ animation:'spin .9s linear infinite' }}/>Dibuat
-                      </button>
+                      <button className="tombol lunak kecil" disabled><Loader2 size={14} className="muter"/>{gifProgress}%</button>
+                    ) : gifBusyServer ? (
+                      <button className="tombol lunak kecil" disabled><Loader2 size={14} className="muter"/>Dibuat</button>
                     ) : (
-                      <button className="row-btn ghost" onClick={generateGif}>
-                        <Sparkles size={13}/>{gifError ? 'Coba lagi' : 'Buat'}
+                      <button className="tombol lunak kecil" onClick={generateGif}>
+                        <Sparkles size={14}/>{gifError ? 'Coba lagi' : 'Buat GIF'}
                       </button>
                     )}
-                  </div>
+                  </figure>
                 )}
 
                 {/* Video */}
                 {media.video_status != null && (
-                  <div className="row" style={{ borderTop: photoCount > 1 ? '1px solid rgba(212,43,34,0.08)' : 'none' }}>
-                    <div className="row-icon"><Film size={17}/></div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <p style={{ fontSize:13.5, fontWeight:600, marginBottom:2 }}>Video</p>
-                      <p style={{ fontSize:11.5, color:'#9E8880' }}>
-                        {media.video_url
-                          ? 'Klip sesi digabung dengan frame'
-                          : media.video_status === 'failed'
-                            ? 'Tidak tersedia untuk sesi ini'
-                            : 'Sedang dirender di mesin'}
-                      </p>
+                  <figure className="kartu media">
+                    <div className="media-isi">
+                      {media.video_url ? (
+                        <video src={media.video_url} controls playsInline preload="metadata"/>
+                      ) : media.video_status === 'failed' ? (
+                        <AlertCircle size={22}/>
+                      ) : (
+                        <Film size={22}/>
+                      )}
                     </div>
+                    <h3 className="lab">Video</h3>
+                    <p className="teks">
+                      {media.video_url
+                        ? 'Klip sesi digabung dengan frame'
+                        : media.video_status === 'failed'
+                          ? 'Tidak tersedia untuk sesi ini'
+                          : 'Sedang dirender di mesin'}
+                    </p>
                     {media.video_url ? (
-                      <button className="row-btn" disabled={busy('video')}
+                      <button className="tombol merah kecil" disabled={busy('video')}
                         onClick={()=>handleDownload(media.video_url!, `photobooth_video_${uuid.slice(0,8)}.mp4`, 'video')}>
-                        {busy('video')
-                          ? <Loader2 size={13} style={{ animation:'spin .8s linear infinite' }}/>
-                          : <Download size={13}/>}
-                        Simpan
+                        {busy('video') ? <Loader2 size={14} className="muter"/> : <Download size={14}/>}Simpan
                       </button>
-                    ) : media.video_status === 'failed' ? (
-                      <AlertCircle size={16} color="#B0A09A" style={{ flexShrink:0 }}/>
-                    ) : (
-                      <button className="row-btn ghost" disabled>
-                        <Loader2 size={13} style={{ animation:'spin .9s linear infinite' }}/>Dirender
-                      </button>
+                    ) : media.video_status === 'failed' ? null : (
+                      <button className="tombol lunak kecil" disabled><Loader2 size={14} className="muter"/>Dirender</button>
                     )}
-                  </div>
+                  </figure>
                 )}
               </div>
-
-              {/* Pemutar video muncul begitu filenya ada */}
-              {media.video_url && (
-                <video
-                  src={media.video_url} controls playsInline preload="metadata"
-                  style={{ width:'100%', marginTop:12, borderRadius:16, border:'1px solid rgba(212,43,34,0.10)', display:'block', background:'#150C09' }}/>
-              )}
             </Section>
           )}
 
           {/* ── PENGADUAN ── */}
-          <section style={{ marginTop:36 }}>
+          <section className="lapor">
             {reportSent ? (
-              <div className="card" style={{ padding:'18px 18px', display:'flex', gap:12, alignItems:'flex-start' }}>
-                <div style={{ width:34, height:34, borderRadius:11, flexShrink:0, background:'rgba(30,122,75,0.10)', color:'#1E7A4B', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <Check size={17} strokeWidth={3}/>
-                </div>
+              <div className="kartu terkirim">
+                <Check size={18} strokeWidth={3} color="#1E7A4B" style={{ flexShrink:0, marginTop:1 }}/>
                 <div>
-                  <p style={{ fontSize:13.5, fontWeight:600, marginBottom:3 }}>Laporan terkirim</p>
-                  <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.55 }}>{reportSent}</p>
+                  <h3 className="lab">Laporan terkirim</h3>
+                  <p className="teks">{reportSent}</p>
                 </div>
               </div>
             ) : photoCount === 0 ? (
               /* Tidak ada satu pun foto: ini keadaan yang paling bikin panik,
                  jadi ajakan melapornya ditampilkan terang-terangan. */
-              <div className="card" style={{ padding:'20px 18px', textAlign:'center' }}>
-                <p style={{ fontSize:14, fontWeight:600, marginBottom:6 }}>Fotonya belum muncul?</p>
-                <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.55, marginBottom:14 }}>
+              <div className="kartu" style={{ padding:'22px 18px' }}>
+                <h3 className="lab" style={{ fontSize:15, color:'#2B1D12' }}>Fotonya belum muncul?</h3>
+                <p className="teks" style={{ fontSize:13, color:'#8A6F60', lineHeight:1.5, margin:'6px 0 16px' }}>
                   Tinggalkan email kamu — hasilnya kami kirim ke sana begitu tersedia.
                 </p>
-                <button className="btn btn-primary" onClick={()=>{ setReportError(null); setReportOpen(true) }}>
-                  <AlertCircle size={15}/>Laporkan
+                <button className="tombol merah" onClick={()=>{ setReportError(null); setReportOpen(true) }}>
+                  <AlertCircle size={16}/>Laporkan
                 </button>
               </div>
             ) : (
-              <div style={{ textAlign:'center' }}>
-                <button
-                  onClick={()=>{ setReportError(null); setReportOpen(true) }}
-                  style={{
-                    background:'none', border:'none', cursor:'pointer', padding:'8px 12px',
-                    fontFamily:"'Poppins',sans-serif", fontSize:12.5, color:'#9E8880',
-                    textDecoration:'underline', textUnderlineOffset:3,
-                  }}>
-                  Ada yang kurang dengan hasilnya? Laporkan
-                </button>
-              </div>
+              <button className="lapor-link teks" onClick={()=>{ setReportError(null); setReportOpen(true) }}>
+                Ada yang kurang dengan hasilnya? Laporkan
+              </button>
             )}
           </section>
 
-          {/* ── FOOTER ── */}
-          <footer className="rise-3" style={{ marginTop:44, textAlign:'center' }}>
-            <div style={{ height:1, background:'rgba(212,43,34,0.10)', marginBottom:20 }}/>
-            <p style={{ fontSize:10, letterSpacing:'0.18em', textTransform:'uppercase', color:'#B0A09A', marginBottom:6 }}>
-              Powered by
-            </p>
-            <p style={{ fontSize:14, fontWeight:700, color:'#7A6259' }}>{clientName}</p>
-            <code style={{ display:'block', marginTop:10, fontSize:10, color:'#C7B8B2', fontFamily:'monospace' }}>
-              {uuid.slice(0,24)}…
-            </code>
+          {/* ── KAKI ── */}
+          <footer className="kaki">
+            <div className="logo-duo">
+              <img className="logo-pk" src="/dlogok/logo-pk.webp" alt=""/>
+              <span className="kali" aria-hidden>×</span>
+              <img className="logo-dl" src="/dlogok/logo-dlogok-putih.webp" alt=""/>
+            </div>
+            <code>{uuid.slice(0,24)}…</code>
           </footer>
         </div>
       </div>
 
       {/* ── MODAL PENGADUAN ── */}
       {reportOpen && (
-        <div className="modal-scrim" onClick={()=>!reportBusy && setReportOpen(false)}>
-          <div className="modal-box" onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Laporkan masalah">
-            <h2 style={{ fontSize:17, fontWeight:800, marginBottom:6, letterSpacing:'-0.01em' }}>
-              Laporkan masalah
-            </h2>
-            <p style={{ fontSize:12.5, color:'#9E8880', lineHeight:1.55, marginBottom:20 }}>
+        <div className="dw-scrim" onClick={()=>!reportBusy && setReportOpen(false)}>
+          <div className="dw-modal" onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Laporkan masalah">
+            <h2>Laporkan masalah</h2>
+            <p className="ket">
               Kami kirim hasil fotomu ke email yang kamu tulis di bawah, dan petugas
               di lokasi langsung diberi tahu.
             </p>
 
             <div style={{ marginBottom:16 }}>
-              <label className="field-label" htmlFor="pk-email">Email <span style={{ color:'#C02018' }}>*</span></label>
+              <label className="label" htmlFor="pk-email">Email <span style={{ color:'#C23A2A' }}>*</span></label>
               <input
                 id="pk-email" className="field" type="email" inputMode="email"
                 autoComplete="email" placeholder="nama@email.com"
@@ -1175,7 +1035,7 @@ export default function DownloadPage({
             </div>
 
             <div style={{ marginBottom:16 }}>
-              <label className="field-label" htmlFor="pk-wa">WhatsApp <span style={{ fontWeight:500, textTransform:'none', letterSpacing:0 }}>(opsional)</span></label>
+              <label className="label" htmlFor="pk-wa">WhatsApp <span style={{ textTransform:'none', letterSpacing:0 }}>(opsional)</span></label>
               <input
                 id="pk-wa" className="field" type="tel" inputMode="tel"
                 autoComplete="tel" placeholder="08xxxxxxxxxx"
@@ -1185,12 +1045,12 @@ export default function DownloadPage({
             </div>
 
             <div style={{ marginBottom:20 }}>
-              <span className="field-label">Masalahnya apa?</span>
+              <span className="label">Masalahnya apa?</span>
               <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
                 {REASONS.map(r => (
                   <button
                     key={r.key} type="button"
-                    className={`chip ${form.reason === r.key ? 'active' : ''}`}
+                    className={`chip ${form.reason === r.key ? 'aktif' : ''}`}
                     onClick={()=>setForm(f=>({ ...f, reason:r.key }))}>
                     {r.label}
                   </button>
@@ -1199,25 +1059,19 @@ export default function DownloadPage({
             </div>
 
             {reportError && (
-              <div style={{ display:'flex', gap:9, alignItems:'flex-start', marginBottom:16, padding:'11px 13px', borderRadius:11, background:'rgba(192,32,24,0.06)', border:'1px solid rgba(192,32,24,0.18)' }}>
-                <AlertCircle size={15} color="#C02018" style={{ flexShrink:0, marginTop:1 }}/>
-                <p style={{ fontSize:12.5, color:'#C02018', lineHeight:1.5 }}>{reportError}</p>
+              <div style={{ display:'flex', gap:9, alignItems:'flex-start', marginBottom:16, padding:'11px 13px', borderRadius:12, background:'rgba(194,58,42,0.08)' }}>
+                <AlertCircle size={15} color="#C23A2A" style={{ flexShrink:0, marginTop:1 }}/>
+                <p style={{ margin:0, fontSize:13, color:'#C23A2A', lineHeight:1.5 }}>{reportError}</p>
               </div>
             )}
 
-            <div style={{ display:'flex', gap:10 }}>
-              <button
-                className="btn btn-ghost" style={{ flex:1 }}
-                disabled={reportBusy}
-                onClick={()=>setReportOpen(false)}>
+            <div className="aksi">
+              <button className="btn batal" disabled={reportBusy} onClick={()=>setReportOpen(false)}>
                 Batal
               </button>
-              <button
-                className="btn btn-primary" style={{ flex:2 }}
-                disabled={reportBusy}
-                onClick={submitReport}>
+              <button className="btn utama" disabled={reportBusy} onClick={submitReport}>
                 {reportBusy
-                  ? <><Loader2 size={15} style={{ animation:'spin .8s linear infinite' }}/>Mengirim…</>
+                  ? <><Loader2 size={15} style={{ animation:'dw-spin .8s linear infinite' }}/>Mengirim…</>
                   : 'Kirim laporan'}
               </button>
             </div>
@@ -1227,13 +1081,12 @@ export default function DownloadPage({
 
       {/* ── LIGHTBOX ── */}
       {lightbox && (
-        <div className="lb" onClick={()=>setLightbox(null)}
-          style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(21,12,9,.94)', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20, cursor:'zoom-out' }}>
+        <div className="dw-lb" onClick={()=>setLightbox(null)}>
           <img src={lightbox} alt="Pratinjau"
-            style={{ maxWidth:'92vw', maxHeight:'88dvh', objectFit:'contain', borderRadius:12 }}
+            style={{ maxWidth:'92vw', maxHeight:'88dvh', objectFit:'contain', borderRadius:10, background:'#FFF6E6', padding:6 }}
             onClick={e=>e.stopPropagation()}/>
           <button onClick={()=>setLightbox(null)} aria-label="Tutup"
-            style={{ position:'fixed', top:'max(16px, env(safe-area-inset-top))', right:16, width:40, height:40, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,255,255,0.14)', border:'1px solid rgba(255,255,255,0.28)', color:'#fff', fontSize:17 }}>
+            style={{ position:'fixed', top:'max(16px, env(safe-area-inset-top))', right:16, width:44, height:44, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,246,230,0.14)', border:'1px solid rgba(255,246,230,0.3)', color:'#FFF6E6', fontSize:17 }}>
             ✕
           </button>
         </div>
