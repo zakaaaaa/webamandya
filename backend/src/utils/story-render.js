@@ -14,9 +14,11 @@
 // Kalau semuanya ditaruh di satu graf video, strip diputar ulang tiap frame
 // dan PNG latar didekode ulang 300x — terukur 10,3 dtk vs 2,5 dtk per Story.
 //
-// Semua komposit dikerjakan di RGB (overlay format=rgb), baru di akhir
-// dikonversi ke BT.709 limited range: overlay bawaan ffmpeg memakai yuv420
-// + matriks BT.601 sehingga warna foto bergeser.
+// Pelat diam dikomposit di RGB (overlay format=rgb). Tahap video dikomposit di
+// YUV, tapi setiap lapisan dikonversi SENDIRI ke BT.709 limited range sebelum
+// overlay — jangan biarkan overlay yang mengonversi RGBA, karena ia memakai
+// matriks BT.601 dan warna foto bergeser. Terukur di VPS (ffmpeg 4.4): rata-rata
+// warna identik dengan jalur RGB, waktu 3,3 -> 2,7 dtk.
 
 const { spawn } = require('child_process');
 const fs = require('fs/promises');
@@ -24,11 +26,14 @@ const path = require('path');
 
 const W = 1080;
 const H = 1920;
-const FPS = 30;
+// 15 fps: foto di slot animasi hanya berganti tiap 0,9 dtk, jadi 30 fps tidak
+// menambah kehalusan tapi menggandakan kerja (VPS: 6,4 -> 2,7 dtk per Story).
+const FPS = 15;
 const DURASI_MIN = 8;   // detik; animasi pendek diulang sampai lewat ini
 const DURASI_MAKS = 20;
 
 const FFMPEG = process.env.FFMPEG_PATH || 'ffmpeg';
+const KE_YUVA = 'scale=out_color_matrix=bt709:out_range=tv,format=yuva420p';
 const FFPROBE = process.env.FFPROBE_PATH || 'ffprobe';
 
 function jalankan(cmd, args, batasMs = 90_000) {
@@ -97,6 +102,7 @@ function filterSlot(slot, sumber, label, { video = false } = {}) {
     ({ ow, oh } = ukuranPutar(w, h, rot));
     rantai.push(`rotate=${rot}*PI/180:c=none:ow=${ow}:oh=${oh}`);
   }
+  if (video) rantai.push(KE_YUVA);
   return {
     filter: `${sumber}${rantai.join(',')}[${label}]`,
     x: bulat(slot.x + w / 2 - ow / 2),
@@ -183,7 +189,7 @@ async function rakitStory({ slots, latar, stiker, hasil, animasi, kerja }) {
 
   const nAnim = kelompok.filter((k) => k.jenis === 'animasi').length;
   const graf = [];
-  graf.push(`[${idxPelat.get(0)}:v]format=rgba,loop=loop=-1:size=1:start=0,fps=${FPS}[b0]`);
+  graf.push(`[${idxPelat.get(0)}:v]scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,loop=loop=-1:size=1:start=0,fps=${FPS}[b0]`);
   if (nAnim > 1) {
     graf.push(`[${idxAnim}:v]split=${nAnim}${Array.from({ length: nAnim }, (_, i) => `[a${i}]`).join('')}`);
   }
@@ -197,15 +203,15 @@ async function rakitStory({ slots, latar, stiker, hasil, animasi, kerja }) {
       const sumber = nAnim > 1 ? `[a${nA}]` : `[${idxAnim}:v]`;
       const f = filterSlot(k.slot, sumber, `v${nA}`, { video: true });
       graf.push(f.filter);
-      graf.push(`[${label}][v${nA}]overlay=${f.x}:${f.y}:format=rgb[b${n}]`);
+      graf.push(`[${label}][v${nA}]overlay=${f.x}:${f.y}:format=yuv420[b${n}]`);
       nA += 1;
     } else {
-      graf.push(`[${idxPelat.get(i)}:v]format=rgba,loop=loop=-1:size=1:start=0,fps=${FPS}[p${n}]`);
-      graf.push(`[${label}][p${n}]overlay=0:0:format=rgb[b${n}]`);
+      graf.push(`[${idxPelat.get(i)}:v]${KE_YUVA},loop=loop=-1:size=1:start=0,fps=${FPS}[p${n}]`);
+      graf.push(`[${label}][p${n}]overlay=0:0:format=yuv420[b${n}]`);
     }
     label = `b${n}`;
   });
-  graf.push(`[${label}]scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[out]`);
+  graf.push(`[${label}]format=yuv420p[out]`);
 
   const out = path.join(kerja, 'story.mp4');
   await jalankan(FFMPEG, [
