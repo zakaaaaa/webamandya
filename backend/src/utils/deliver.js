@@ -101,7 +101,8 @@ async function siapkanLampiran(aset, kodeSesi) {
   const antre = [];
   if (aset.strip) antre.push({ url: aset.strip, filename: `photostrip_${pendek}.png` });
   aset.foto.forEach((u, i) => antre.push({ url: u, filename: `foto_${i + 1}_${pendek}.jpg` }));
-  if (aset.gif) antre.push({ url: aset.gif, filename: `animasi_${pendek}.gif` });
+  // gif_url bisa MP4 slideshow (sejak 10 Okt 2026) atau GIF (sesi lama).
+  if (aset.gif) antre.push({ url: aset.gif, filename: `animasi_${pendek}.${aset.gif.endsWith('.mp4') ? 'mp4' : 'gif'}` });
 
   const lampiran = [];
   const gagal = [];
@@ -126,6 +127,18 @@ async function siapkanLampiran(aset, kodeSesi) {
   return { lampiran, total, gagal, stripBuf };
 }
 
+async function stripSaja(aset) {
+  let stripBuf = null;
+  if (aset.strip) {
+    try {
+      stripBuf = await unduh(aset.strip);
+    } catch (e) {
+      console.error(`[Kirim] Gagal mengunduh strip untuk pratinjau: ${e.message}`);
+    }
+  }
+  return { lampiran: [], total: 0, gagal: [], stripBuf };
+}
+
 /** Kecilkan strip jadi pratinjau ringan yang aman ditempel di email. */
 async function buatPratinjau(stripBuf) {
   if (!stripBuf) return null;
@@ -148,14 +161,20 @@ const tombol = (href, teks) =>
 const tautan = (href, teks) =>
   `<a href="${href}" style="color:#C02018;text-decoration:underline">${teks}</a>`;
 
-function susunEmail({ aset, kodeSesi, waktuSesi, halamanUnduh, adaLampiran, adaPratinjau }) {
+// Kalimat penutup email menurut asal permintaannya.
+const ALASAN = {
+  pengaduan: 'Email ini dikirim karena kamu melaporkan hasil fotomu belum diterima.',
+  booth: 'Email ini dikirim karena kamu mengisi alamat email di booth Pabrik Kenangan.',
+};
+
+function susunEmail({ aset, kodeSesi, waktuSesi, halamanUnduh, adaLampiran, adaPratinjau, alasan = 'pengaduan' }) {
   const daftar = [];
   if (aset.strip) daftar.push(`<li style="margin-bottom:6px">Photo strip — ${tautan(aset.strip, 'unduh')}</li>`);
   if (aset.foto.length) {
     const per = aset.foto.map((u, i) => tautan(u, `${i + 1}`)).join(' · ');
     daftar.push(`<li style="margin-bottom:6px">${aset.foto.length} foto asli — ${per}</li>`);
   }
-  if (aset.gif) daftar.push(`<li style="margin-bottom:6px">GIF animasi — ${tautan(aset.gif, 'unduh')}</li>`);
+  if (aset.gif) daftar.push(`<li style="margin-bottom:6px">${aset.gif.endsWith('.mp4') ? 'Animasi slideshow' : 'GIF animasi'} — ${tautan(aset.gif, 'unduh')}</li>`);
   if (aset.video) daftar.push(`<li style="margin-bottom:6px">Video — ${tautan(aset.video, 'unduh')}</li>`);
 
   const html = `
@@ -192,7 +211,7 @@ function susunEmail({ aset, kodeSesi, waktuSesi, halamanUnduh, adaLampiran, adaP
 
     <div style="height:1px;background:rgba(212,43,34,0.12);margin-bottom:16px"></div>
     <p style="margin:0;font-size:11.5px;color:#B0A09A;text-align:center;line-height:1.6">
-      Email ini dikirim karena kamu melaporkan hasil fotomu belum diterima.<br>
+      ${ALASAN[alasan] || ALASAN.pengaduan}<br>
       Kode sesi: ${esc(kodeSesi)}
     </p>
   </div>
@@ -218,7 +237,7 @@ function susunEmail({ aset, kodeSesi, waktuSesi, halamanUnduh, adaLampiran, adaP
  * Kirim seluruh aset sesi ke satu alamat email.
  * @returns {Promise<{ok:boolean, alasan?:string, jumlahLampiran?:number}>}
  */
-async function kirimHasilSesi({ session, tujuan, kodeSesi }) {
+async function kirimHasilSesi({ session, tujuan, kodeSesi, alasan }) {
   if (!smtpSiap) return { ok: false, alasan: 'SMTP belum dikonfigurasi' };
 
   const aset = await kumpulkanAset(session);
@@ -232,7 +251,11 @@ async function kirimHasilSesi({ session, tujuan, kodeSesi }) {
     dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Jakarta',
   });
 
-  const { lampiran, total, gagal, stripBuf } = await siapkanLampiran(aset, kodeSesi);
+  // Email dari booth: berkasnya sudah di R2, cukup tautan ke halaman unduh —
+  // tanpa lampiran. Strip tetap diunduh untuk pratinjau di badan email.
+  const { lampiran, total, gagal, stripBuf } = alasan === 'booth'
+    ? await stripSaja(aset)
+    : await siapkanLampiran(aset, kodeSesi);
 
   // Gambar yang tampil di badan email: logo + pratinjau strip, keduanya
   // ditempel inline supaya tidak bergantung pada proxy gambar klien email.
@@ -249,6 +272,7 @@ async function kirimHasilSesi({ session, tujuan, kodeSesi }) {
     aset, kodeSesi, waktuSesi, halamanUnduh,
     adaLampiran: lampiran.length > 0,
     adaPratinjau: Boolean(pratinjau),
+    alasan,
   });
 
   try {

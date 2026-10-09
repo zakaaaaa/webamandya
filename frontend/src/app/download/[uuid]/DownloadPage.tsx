@@ -321,6 +321,9 @@ export default function DownloadPage({
   // daripada merakit ulang di HP pelanggan, dan hasilnya konsisten.
   const serverGifUrl    = media.gif_status === 'ready' ? media.gif_url : null
   const effectiveGifUrl = serverGifUrl ?? gifUrl
+  // Sejak 10 Okt 2026 mesin mengunggah animasi sebagai MP4 slideshow (bisa
+  // langsung diposting ke IG/TikTok); sesi lama & cadangan tetap GIF.
+  const animMp4         = !!effectiveGifUrl && /\.mp4($|\?)/i.test(effectiveGifUrl)
 
   // Media yang memang diharapkan muncul untuk sesi ini. Status 'failed'
   // dihitung sebagai selesai — bukan sesuatu yang masih perlu ditunggu.
@@ -332,7 +335,7 @@ export default function DownloadPage({
   const steps = [
     { key:'photos', label:'Foto',        done: photoCount > 0,                 show: true },
     { key:'strip',  label:'Photo strip', done: !!media.result_url,             show: true },
-    { key:'gif',    label:'GIF animasi', done: media.gif_status === 'ready',   show: gifExpected },
+    { key:'gif',    label:'Animasi',     done: media.gif_status === 'ready',   show: gifExpected },
     { key:'video',  label:'Video',       done: media.video_status === 'ready', show: videoExpected },
   ].filter(s => s.show)
 
@@ -900,7 +903,7 @@ export default function DownloadPage({
 
           {/* ── GIF & VIDEO ── */}
           {(photoCount > 1 || media.video_status != null) && (
-            <Section title="GIF & video">
+            <Section title={animMp4 ? "Animasi & video" : "GIF & video"}>
               <div className="duo">
 
                 {/* GIF */}
@@ -908,9 +911,11 @@ export default function DownloadPage({
                   <figure className="kartu media">
                     <div className="media-isi" style={{ cursor: effectiveGifUrl ? 'zoom-in' : 'default' }}
                       onClick={()=> effectiveGifUrl && setLightbox(effectiveGifUrl)}>
-                      {gifPreviewSrc ? <img src={gifPreviewSrc} alt="GIF animasi"/> : <Sparkles size={22}/>}
+                      {animMp4
+                        ? <video src={effectiveGifUrl!} autoPlay muted loop playsInline style={{ objectFit:'cover' }}/>
+                        : gifPreviewSrc ? <img src={gifPreviewSrc} alt="GIF animasi"/> : <Sparkles size={22}/>}
                     </div>
-                    <h3 className="lab">GIF animasi</h3>
+                    <h3 className="lab">{animMp4 ? 'Animasi' : 'GIF animasi'}</h3>
                     <p className="teks">
                       {effectiveGifUrl
                         ? (serverGifUrl ? 'Dibuat di mesin photobooth' : 'Dibuat di HP kamu')
@@ -924,7 +929,7 @@ export default function DownloadPage({
                     </p>
                     {effectiveGifUrl ? (
                       <button className="tombol merah kecil" disabled={busy('gif')}
-                        onClick={()=>handleDownload(effectiveGifUrl, `photobooth_gif_${uuid.slice(0,8)}.gif`, 'gif')}>
+                        onClick={()=>handleDownload(effectiveGifUrl, animMp4 ? `photobooth_animasi_${uuid.slice(0,8)}.mp4` : `photobooth_gif_${uuid.slice(0,8)}.gif`, 'gif')}>
                         {busy('gif') ? <Loader2 size={14} className="muter"/> : <Download size={14}/>}Simpan
                       </button>
                     ) : gifLoading ? (
@@ -1082,9 +1087,15 @@ export default function DownloadPage({
       {/* ── LIGHTBOX ── */}
       {lightbox && (
         <div className="dw-lb" onClick={()=>setLightbox(null)}>
-          <img src={lightbox} alt="Pratinjau"
-            style={{ maxWidth:'92vw', maxHeight:'88dvh', objectFit:'contain', borderRadius:10, background:'#FFF6E6', padding:6 }}
-            onClick={e=>e.stopPropagation()}/>
+          {/\.mp4($|\?)/i.test(lightbox) ? (
+            <video src={lightbox} autoPlay muted loop playsInline
+              style={{ maxWidth:'92vw', maxHeight:'88dvh', objectFit:'contain', borderRadius:10, background:'#FFF6E6', padding:6 }}
+              onClick={e=>e.stopPropagation()}/>
+          ) : (
+            <img src={lightbox} alt="Pratinjau"
+              style={{ maxWidth:'92vw', maxHeight:'88dvh', objectFit:'contain', borderRadius:10, background:'#FFF6E6', padding:6 }}
+              onClick={e=>e.stopPropagation()}/>
+          )}
           <button onClick={()=>setLightbox(null)} aria-label="Tutup"
             style={{ position:'fixed', top:'max(16px, env(safe-area-inset-top))', right:16, width:44, height:44, borderRadius:'50%', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(255,246,230,0.14)', border:'1px solid rgba(255,246,230,0.3)', color:'#FFF6E6', fontSize:17 }}>
             ✕

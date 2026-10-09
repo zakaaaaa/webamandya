@@ -129,7 +129,10 @@ router.post('/video', uploadVideo.single('video'), async (req, res) => {
   return res.status(201).json({ success: true, url: stored.url });
 });
 
-// POST /api/photobooth/upload/gif  (GIF animasi hasil sesi)
+// POST /api/photobooth/upload/gif  (animasi slideshow hasil sesi)
+// Sejak 10 Okt 2026 kios mengirim MP4 (content-type video/mp4) di field yang
+// sama; kios lama / cadangan tetap mengirim GIF. Nama objek mengikuti jenisnya
+// supaya halaman unduh bisa memilih <video> atau <img> dari ekstensi gif_url.
 router.post('/gif', uploadImage.single('gif'), async (req, res) => {
   const { session_uuid } = req.body;
   if (!req.file || !session_uuid) {
@@ -139,11 +142,12 @@ router.post('/gif', uploadImage.single('gif'), async (req, res) => {
   const session = await findSession(session_uuid);
   if (!session) return res.status(404).json({ success: false, message: 'Session tidak ditemukan.' });
 
-  const key = `results/${session.client_id}/${session.id}/animation.gif`;
+  const mp4 = req.file.mimetype === 'video/mp4';
+  const key = `results/${session.client_id}/${session.id}/animation.${mp4 ? 'mp4' : 'gif'}`;
 
   let stored;
   try {
-    stored = await putObject({ key, body: req.file.buffer, contentType: req.file.mimetype || 'image/gif' });
+    stored = await putObject({ key, body: req.file.buffer, contentType: mp4 ? 'video/mp4' : 'image/gif' });
   } catch (e) {
     console.error('[Upload] gif -> R2 gagal:', e.message);
     return res.status(500).json({ success: false, message: 'Gagal upload GIF.' });
