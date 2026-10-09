@@ -41,7 +41,7 @@ const HALAMAN_DASH = ['/talent', '/masuk']
  */
 const DASBOR = new Set([
   'dashboard', 'clients', 'devices', 'frames',
-  'gallery', 'settings', 'transactions', 'vouchers', 'login',
+  'gallery', 'settings', 'transactions', 'vouchers', 'login', 'story',
 ])
 
 export async function proxy(request: NextRequest) {

@@ -27,6 +27,7 @@ require('./workers/penyapu-sesi').mulai();
 app.use('/api/payment',            require('./routes/payment'));
 app.use('/api/frames',             require('./routes/frames'));
 app.use('/api/queue',              require('./routes/queue'));
+app.use('/api/story',              require('./routes/story'));
 app.use('/download', require('./routes/download'));
 
 // Health check

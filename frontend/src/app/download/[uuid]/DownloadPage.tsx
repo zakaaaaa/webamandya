@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Download, Check, Loader2, Film, Sparkles, AlertCircle, Printer, Bell, BellOff } from 'lucide-react'
 import { DOWNLOAD_CSS } from './download.css'
+import StorySection from './StorySection'
 
 // pending    = mesin belum mulai
 // processing = mesin sedang merender/mengunggah
@@ -977,6 +978,9 @@ export default function DownloadPage({
               </div>
             </Section>
           )}
+
+          {/* ── STORY IG ── */}
+          {photoCount > 0 && <StorySection kode={uuid} api={API_BASE} downloadOne={downloadOne}/>}
 
           {/* ── PENGADUAN ── */}
           <section className="lapor">
