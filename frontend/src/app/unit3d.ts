@@ -261,7 +261,7 @@ function mount(cfg: MountCfg, m: Mesh): (() => void) | null {
   const down = (e: PointerEvent) => {
     dragging = true; idleAt = Date.now() + 2800
     lastX = e.clientX; lastY = e.clientY
-    if (!touched && cfg.hint) { touched = true; cfg.hint.textContent = 'PINDAI SELURUH SISI' }
+    if (!touched && cfg.hint) { touched = true; cfg.hint.textContent = 'Lepas untuk berhenti' }
     cv.setPointerCapture?.(e.pointerId)
   }
   const move = (e: PointerEvent) => {

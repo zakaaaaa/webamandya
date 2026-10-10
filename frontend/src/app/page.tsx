@@ -1,8 +1,12 @@
 import type { Metadata } from 'next'
+import { Bagel_Fat_One, Plus_Jakarta_Sans } from 'next/font/google'
 import Landing from './Landing'
 
-/* Root "/" adalah halaman sewa photobooth. Dashboard tetap bisa dibuka di
-   /dashboard dan /login sampai subdomain app.pabrikenangan.my.id disiapkan. */
+/* Font khusus landing; dashboard tetap memakai Poppins dari globals.css. */
+const bagel = Bagel_Fat_One({ weight: '400', subsets: ['latin'], variable: '--font-bagel', display: 'swap' })
+const jakarta = Plus_Jakarta_Sans({ weight: ['400', '500', '600', '700'], subsets: ['latin'], variable: '--font-jakarta', display: 'swap' })
+
+/* Root "/" adalah halaman sewa photobooth. Dashboard ada di app.pabrikenangan.my.id. */
 export const metadata: Metadata = {
   title: 'Sewa Photobooth Bandar Lampung | Pabrik Kenangan',
   description:
@@ -17,5 +21,9 @@ export const metadata: Metadata = {
 }
 
 export default function RootPage() {
-  return <Landing />
+  return (
+    <div className={`${bagel.variable} ${jakarta.variable}`}>
+      <Landing />
+    </div>
+  )
 }
