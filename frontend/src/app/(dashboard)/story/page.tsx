@@ -33,15 +33,24 @@ export default async function StoryPage() {
 
   type Baris = {
     transaction_code: string; result_url: string; gif_url: string | null
-    frames: { paper_size: string | null; output_width: number | null; photo_slots: { x: number; width: number }[] | null } | null
+    frames: { paper_size: string | null; output_width: number | null; photo_slots: { x: number; width: number; height: number }[] | null } | null
   }
+  // Sama dengan frameStrip2 di backend/src/utils/story-render.js: jumlah slot
+  // tiap separuh sama dan ukurannya serupa.
   const strip2 = (f: Baris['frames']) => {
     if (!f || String(f.paper_size ?? '').toUpperCase() !== '4R') return false
     const W = Number(f.output_width) || 0
     const s = Array.isArray(f.photo_slots) ? f.photo_slots : []
-    if (!W || s.length < 4) return false
-    const kiri = s.filter(x => x.x + x.width / 2 < W / 2).length
-    return kiri >= 2 && s.length - kiri >= 2 && s.every(x => x.width < W / 2)
+    if (!W || s.length < 4 || !s.every(x => x.width < W / 2)) return false
+    const kiri = s.filter(x => x.x + x.width / 2 < W / 2)
+    const kanan = s.filter(x => x.x + x.width / 2 >= W / 2)
+    if (kiri.length < 2 || kiri.length !== kanan.length) return false
+    const median = (a: number[]) => [...a].sort((p, q) => p - q)[Math.floor(a.length / 2)]
+    const mirip = (k: 'width' | 'height') => {
+      const r = median(kanan.map(x => x[k])) / median(kiri.map(x => x[k]))
+      return r > 0.75 && r < 1.33
+    }
+    return mirip('width') && mirip('height')
   }
   const contoh: ContohSesi[] = ((sesiTerbaru ?? []) as unknown as Baris[])
     .map(b => ({ kode: b.transaction_code, hasil: b.result_url, animasi: b.gif_url, strip2: strip2(b.frames) }))

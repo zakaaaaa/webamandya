@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 
 // ── Tipe (sama dengan kolom story_templates & backend/src/utils/story-render.js)
-export type IsiSlot = 'strip_kiri' | 'strip_kanan' | 'hasil' | 'animasi'
+export type IsiSlot = 'strip_kiri' | 'strip_kanan' | 'hasil' | 'animasi' | 'foto_strip'
 export type Slot = {
   id: string; isi: IsiSlot
   x: number; y: number; w: number; h: number; rot: number
@@ -28,10 +28,10 @@ const MERAH = '#D42B22'
 const FONT = "'Poppins',sans-serif"
 
 const LABEL_ISI: Record<IsiSlot, string> = {
-  strip_kiri: 'Strip kiri', strip_kanan: 'Strip kanan', hasil: 'Hasil utuh', animasi: 'Animasi',
+  strip_kiri: 'Strip kiri', strip_kanan: 'Strip kanan', hasil: 'Hasil utuh', animasi: 'Animasi', foto_strip: 'Strip foto asli',
 }
 const WARNA_ISI: Record<IsiSlot, string> = {
-  strip_kiri: '#2563eb', strip_kanan: '#7c3aed', hasil: '#059669', animasi: MERAH,
+  strip_kiri: '#2563eb', strip_kanan: '#7c3aed', hasil: '#059669', animasi: MERAH, foto_strip: '#d97706',
 }
 
 const idBaru = () => Math.random().toString(36).slice(2, 9)
@@ -40,6 +40,7 @@ function slotBaru(isi: IsiSlot): Slot {
   const dasar = { id: idBaru(), isi, rot: 0, bingkai: 0, warna_bingkai: '#ffffff' }
   if (isi === 'animasi') return { ...dasar, x: 190, y: 140, w: 700, h: 467, bingkai: 14 }
   if (isi === 'hasil') return { ...dasar, x: 240, y: 560, w: 600, h: 900 }
+  if (isi === 'foto_strip') return { ...dasar, x: 160, y: 260, w: 460, h: 1380, rot: -7 }
   return { ...dasar, x: isi === 'strip_kiri' ? 90 : 560, y: 620, w: 400, h: 1200, rot: isi === 'strip_kiri' ? -6 : 5 }
 }
 
@@ -53,7 +54,14 @@ function IsiPratinjau({ slot, contoh, ukuranHasil, skala }: {
   const ih = (slot.h - 2 * b) * skala
 
   let isi: React.ReactNode = null
-  if (contoh && slot.isi === 'animasi' && contoh.animasi) {
+  if (slot.isi === 'foto_strip') {
+    // Foto mentah sesi ditumpuk vertikal oleh server (rakitStripFoto); sesi
+    // contoh tidak membawa daftar foto, jadi cukup tanda. Lihat lewat "Uji render".
+    isi = (
+      <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 12, fontWeight: 700,
+        background: `repeating-linear-gradient(180deg, ${WARNA_ISI.foto_strip}aa 0 30%, #0006 30% 31%)` }}>Strip foto asli</div>
+    )
+  } else if (contoh && slot.isi === 'animasi' && contoh.animasi) {
     isi = /\.mp4($|\?)/i.test(contoh.animasi)
       ? <video src={contoh.animasi} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
       // eslint-disable-next-line @next/next/no-img-element
@@ -377,7 +385,7 @@ function Editor({ awal, clientId, daftarContoh, onKembali, onTersimpan }: {
           <div>
             <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase', color: '#9E8880', margin: '4px 0 6px' }}>Tambah slot</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {(['strip_kiri', 'strip_kanan', 'animasi', 'hasil'] as IsiSlot[])
+              {(['strip_kiri', 'strip_kanan', 'animasi', 'hasil', 'foto_strip'] as IsiSlot[])
                 .filter(i => d.jenis === 'strip2' || (i !== 'strip_kiri' && i !== 'strip_kanan'))
                 .map(i => (
                   <button key={i} onClick={() => { const s = slotBaru(i); setD(p => ({ ...p, slots: [...p.slots, s] })); setPilih(s.id) }}

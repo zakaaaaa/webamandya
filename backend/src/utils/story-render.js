@@ -2,7 +2,8 @@
 //
 // Satu template = latar 1080x1920, daftar slot, dan stiker opsional di depan.
 // Slot: { isi, x, y, w, h, rot, bingkai, warna_bingkai }
-//   isi  : 'strip_kiri' | 'strip_kanan' | 'hasil' | 'animasi'
+//   isi  : 'strip_kiri' | 'strip_kanan' | 'hasil' | 'animasi' | 'foto_strip'
+//          foto_strip = foto mentah sesi (tanpa frame) ditumpuk vertikal
 //   x,y  : pojok kiri-atas kotak SEBELUM diputar (piksel kanvas 1080x1920)
 //   w,h  : ukuran kotak; isi diisi "cover" (dipotong, tidak gepeng)
 //   rot  : derajat, searah jarum jam, berporos di tengah kotak — SAMA dengan
@@ -117,11 +118,12 @@ function filterSlot(slot, sumber, label, { video = false } = {}) {
  * @param {string} o.latar        PNG/JPG latar
  * @param {string|null} o.stiker  PNG transparan di depan (opsional)
  * @param {string} o.hasil        hasil cetak (final.png)
+ * @param {string|null} o.fotoStrip strip foto mentah untuk slot foto_strip (opsional)
  * @param {string|null} o.animasi MP4/GIF animasi sesi (opsional)
  * @param {string} o.kerja        folder kerja sementara
  * @returns {Promise<{file: string, jenis: 'video'|'gambar'}>}
  */
-async function rakitStory({ slots, latar, stiker, hasil, animasi, kerja }) {
+async function rakitStory({ slots, latar, stiker, hasil, fotoStrip = null, animasi, kerja }) {
   // Tanpa animasi di sesi ini, slot animasi diisi hasil cetak (tetap diam).
   const pakaiAnimasi = Boolean(animasi) && slots.some((s) => s.isi === 'animasi');
   const statis = (s) => !(pakaiAnimasi && s.isi === 'animasi');
@@ -152,7 +154,7 @@ async function rakitStory({ slots, latar, stiker, hasil, animasi, kerja }) {
     const k = kelompok[i];
     if (k.jenis !== 'pelat') continue;
     const file = path.join(kerja, `pelat${i}.png`);
-    await rakitPelat({ ...k, latar, stiker, hasil, file });
+    await rakitPelat({ ...k, latar, stiker, hasil, fotoStrip, file });
     k.file = file;
     pelat.push(file);
   }
@@ -226,8 +228,30 @@ async function rakitStory({ slots, latar, stiker, hasil, animasi, kerja }) {
   return { file: out, jenis: 'video' };
 }
 
+/**
+ * Strip dari foto mentah sesi: tiap foto dipotong "cover" ke sel w x (h/n),
+ * ditumpuk vertikal dengan garis pemisah tipis, hasil persis w x h.
+ * Dibuat pada ukuran slot terbesar supaya tidak diskalakan ulang.
+ */
+async function rakitStripFoto(foto, w, h, file, { garis = 4, warnaGaris = '#1a1410' } = {}) {
+  const n = foto.length;
+  w = Math.max(8, bulat(w)); h = Math.max(8, bulat(h));
+  const sel = Math.ceil((h - garis * (n - 1)) / n);
+  const masukan = [];
+  const graf = [];
+  foto.forEach((f, i) => {
+    masukan.push('-i', f);
+    const pad = i < n - 1 ? `,pad=${w}:${sel + garis}:0:0:color=${warnaGaris}` : '';
+    graf.push(`[${i}:v]scale=${w}:${sel}:force_original_aspect_ratio=increase,crop=${w}:${sel},setsar=1,format=rgba${pad}[f${i}]`);
+  });
+  graf.push(n > 1 ? `${foto.map((_, i) => `[f${i}]`).join('')}vstack=inputs=${n},crop=${w}:${h}:0:0[out]` : `[f0]crop=${w}:${h}:0:0[out]`);
+  await jalankan(FFMPEG, ['-y', '-hide_banner', '-loglevel', 'error', ...masukan,
+    '-filter_complex', graf.join(';'), '-map', '[out]', '-frames:v', '1', file]);
+  return file;
+}
+
 /** Satu pelat PNG: (latar | transparan) + slot diam + (stiker). */
-async function rakitPelat({ slots, pertama, stiker: pakaiStiker, latar, stiker, hasil, file }) {
+async function rakitPelat({ slots, pertama, stiker: pakaiStiker, latar, stiker, hasil, fotoStrip, file }) {
   const masukan = [];
   const graf = [];
   let nMasukan = 1; // indeks input ffmpeg; '-f lavfi' membuat panjang argumen tak bisa dipakai
@@ -242,14 +266,10 @@ async function rakitPelat({ slots, pertama, stiker: pakaiStiker, latar, stiker, 
   label = 'b0';
 
   if (slots.length) {
-    const idxHasil = nMasukan++;
-    masukan.push('-i', hasil);
-    if (slots.length > 1) {
-      graf.push(`[${idxHasil}:v]split=${slots.length}${slots.map((_, i) => `[h${i}]`).join('')}`);
-    }
     slots.forEach((s, i) => {
-      const sumber = slots.length > 1 ? `[h${i}]` : `[${idxHasil}:v]`;
-      const f = filterSlot(s, sumber, `s${i}`);
+      const idx = nMasukan++;
+      masukan.push('-i', s.isi === 'foto_strip' && fotoStrip ? fotoStrip : hasil);
+      const f = filterSlot(s, `[${idx}:v]`, `s${i}`);
       graf.push(f.filter);
       graf.push(`[${label}][s${i}]overlay=${f.x}:${f.y}:format=rgb[c${i}]`);
       label = `c${i}`;
@@ -267,19 +287,31 @@ async function rakitPelat({ slots, pertama, stiker: pakaiStiker, latar, stiker, 
     '-filter_complex', graf.join(';'), '-map', '[keluar]', '-frames:v', '1', file]);
 }
 
-/** Frame strip 2 kolom (4R berisi dua strip) — hanya ini yang boleh dibelah. */
+/**
+ * Frame strip 2 kolom (4R berisi dua strip) — hanya ini yang boleh dibelah.
+ * Tiap separuh harus berisi jumlah slot yang sama dengan ukuran serupa.
+ * Posisinya boleh tidak kembar (banyak desain menggeser satu kolom), tapi
+ * frame seperti Playlist 7 slot (satu strip besar + 4 cetakan mini di kanan)
+ * harus ditolak: separuh kanannya bukan strip.
+ */
 function frameStrip2(frame) {
   if (!frame || String(frame.paper_size || '').toUpperCase() !== '4R') return false;
   const W0 = Number(frame.output_width) || 0;
   const slots = Array.isArray(frame.photo_slots) ? frame.photo_slots : [];
-  if (!W0 || slots.length < 4) return false;
-  const kiri = slots.filter((s) => s.x + s.width / 2 < W0 / 2).length;
-  const kanan = slots.length - kiri;
-  return kiri >= 2 && kanan >= 2 && slots.every((s) => s.width < W0 / 2);
+  if (!W0 || slots.length < 4 || !slots.every((s) => s.width < W0 / 2)) return false;
+  const kiri = slots.filter((s) => s.x + s.width / 2 < W0 / 2);
+  const kanan = slots.filter((s) => s.x + s.width / 2 >= W0 / 2);
+  if (kiri.length < 2 || kiri.length !== kanan.length) return false;
+  const median = (a) => { const b = [...a].sort((p, q) => p - q); return b[Math.floor(b.length / 2)]; };
+  const mirip = (k) => {
+    const r = median(kanan.map((s) => s[k])) / median(kiri.map((s) => s[k]));
+    return r > 0.75 && r < 1.33;
+  };
+  return mirip('width') && mirip('height');
 }
 
 async function bersihkan(dir) {
   try { await fs.rm(dir, { recursive: true, force: true }); } catch { /* biarkan */ }
 }
 
-module.exports = { rakitStory, frameStrip2, bersihkan, ukuranPutar, W, H };
+module.exports = { rakitStory, rakitStripFoto, frameStrip2, bersihkan, ukuranPutar, W, H };

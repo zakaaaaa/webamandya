@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Share2, Download, Sparkles, AlertCircle } from 'lucide-react'
+import { Loader2, Share2, Download, Sparkles, AlertCircle, Play, Check } from 'lucide-react'
 
 // "Bikin Story IG": pelanggan memilih template, server (VPS, ffmpeg) merakit
 // hasil sesinya ke template itu — lihat backend/src/routes/story.js.
@@ -11,7 +11,35 @@ import { Loader2, Share2, Download, Sparkles, AlertCircle } from 'lucide-react'
 // mengunduh dulu setelah ketukan membuat izin itu kedaluwarsa (share gagal
 // diam-diam).
 
-type Template = { id: string; nama: string; thumb: string; stiker: string | null; video: boolean }
+type Slot = { isi: string; x: number; y: number; w: number; h: number; rot: number }
+type Template = { id: string; nama: string; thumb: string; stiker: string | null; video: boolean; slots?: Slot[] }
+
+// Penanda "foto kamu di sini" di thumbnail: latar + penanda + stiker, posisi
+// dalam persen kanvas 1080x1920 supaya ikut ukuran kartu.
+function Penanda({ s }: { s: Slot }) {
+  const kotak: React.CSSProperties = {
+    position: 'absolute', left: `${(s.x / 1080) * 100}%`, top: `${(s.y / 1920) * 100}%`,
+    width: `${(s.w / 1080) * 100}%`, height: `${(s.h / 1920) * 100}%`, transform: `rotate(${s.rot}deg)`,
+  }
+  if (s.isi === 'animasi') {
+    return (
+      <span style={{ ...kotak, background: 'linear-gradient(160deg,#4A2F1F,#2B1D12)', display: 'grid', placeItems: 'center' }}>
+        <span style={{ width: '22%', aspectRatio: '1', minWidth: 14, borderRadius: '50%', background: 'rgba(255,246,230,.92)', display: 'grid', placeItems: 'center' }}>
+          <Play size={9} fill="#C23A2A" color="#C23A2A" style={{ marginLeft: 1 }} />
+        </span>
+      </span>
+    )
+  }
+  // Strip: kertas krem berisi tiga petak foto kosong.
+  const petak = s.isi === 'hasil' ? 1 : 3
+  return (
+    <span style={{ ...kotak, background: '#F7F1E6', padding: '5% 7%', display: 'flex', flexDirection: 'column', gap: '3%', boxShadow: '0 2px 5px rgba(0,0,0,.35)' }}>
+      {Array.from({ length: petak }, (_, i) => (
+        <span key={i} style={{ flex: 1, borderRadius: 2, background: 'repeating-linear-gradient(135deg,#EADFCC 0 4px,#E2D5BF 4px 8px)' }} />
+      ))}
+    </span>
+  )
+}
 type Hasil = { id: string; url: string; jenis: 'video' | 'gambar'; file?: File }
 
 export default function StorySection({ kode, api, downloadOne }: {
@@ -99,35 +127,62 @@ export default function StorySection({ kode, api, downloadOne }: {
     }
     // Browser tanpa share berkas (mis. desktop): simpan saja, unggah dari galeri.
     await simpan()
-    setGalat('HP ini belum bisa langsung membagikan. Story sudah disimpan — unggah dari galeri ke IG.')
+    setGalat('HP ini belum bisa posting langsung. Story-nya sudah tersimpan, tinggal unggah dari galeri.')
   }
 
   if (!templates || templates.length === 0) return null
 
   return (
     <section className="blok">
-      <h2 className="sub-judul">Bikin Story IG</h2>
-      <span className="sub-ket lab">Pilih desain, langsung posting</span>
+      <h2 className="sub-judul">Pamer ke Story</h2>
+      <span className="sub-ket lab">Pilih desain · kami tempel fotomu</span>
 
-      <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 2px 10px', scrollSnapType: 'x mandatory' }}>
-        {templates.map(t => (
-          <button key={t.id} onClick={() => pilihTemplate(t)} aria-label={t.nama} style={{
-            position: 'relative', flex: '0 0 92px', aspectRatio: '9/16', borderRadius: 12, overflow: 'hidden', padding: 0,
-            border: 0, cursor: 'pointer', scrollSnapAlign: 'start', background: '#2B1D12',
-            boxShadow: pilih === t.id ? '0 0 0 3px var(--kuning)' : '0 0 0 1px rgba(255,246,230,.25)',
-          }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={t.thumb} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            {t.stiker && <img src={t.stiker} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />}
-            {memuat === t.id && (
-              <span style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(43,29,18,.55)' }}>
-                <Loader2 size={20} color="#FFF6E6" className="muter" />
+      <div style={{ display: 'flex', gap: 12, overflowX: 'auto', padding: '14px 2px 12px', margin: '0 -20px', paddingInline: 20, scrollSnapType: 'x mandatory', scrollPaddingInline: 20 }}>
+        {templates.map(t => {
+          const aktifKartu = pilih === t.id
+          return (
+            <button key={t.id} onClick={() => pilihTemplate(t)} aria-label={t.nama} aria-pressed={aktifKartu} style={{
+              flex: '0 0 124px', padding: 0, border: 0, background: 'none', cursor: 'pointer', scrollSnapAlign: 'start', textAlign: 'center',
+            }}>
+              <span style={{
+                position: 'relative', display: 'block', aspectRatio: '9/16', borderRadius: 14, overflow: 'hidden', background: '#2B1D12',
+                boxShadow: aktifKartu ? '0 0 0 3px var(--kuning), 0 10px 22px rgba(70,10,4,.45)' : '0 0 0 1px rgba(255,246,230,.22), 0 6px 14px rgba(70,10,4,.3)',
+                transform: aktifKartu ? 'translateY(-4px)' : 'none', transition: 'transform .2s, box-shadow .2s',
+              }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={t.thumb} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+                {t.stiker && t.slots?.map((s, i) => <Penanda key={i} s={s} />)}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {t.stiker && <img src={t.stiker} alt="" loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />}
+                {t.video && (
+                  <span className="lab" style={{ position: 'absolute', left: 6, top: 6, display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 6px 2px', borderRadius: 20, fontSize: 8, background: 'var(--merah)', color: 'var(--krem)' }}>
+                    <Play size={7} fill="currentColor" />Video
+                  </span>
+                )}
+                {aktifKartu && memuat !== t.id && (
+                  <span style={{ position: 'absolute', right: 6, top: 6, width: 20, height: 20, borderRadius: '50%', background: 'var(--kuning)', display: 'grid', placeItems: 'center' }}>
+                    <Check size={12} color="#C23A2A" strokeWidth={3} />
+                  </span>
+                )}
+                {memuat === t.id && (
+                  <span style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'rgba(43,29,18,.55)' }}>
+                    <Loader2 size={20} color="#FFF6E6" className="muter" />
+                  </span>
+                )}
               </span>
-            )}
-          </button>
-        ))}
+              <span className="lab" style={{ display: 'block', marginTop: 8, fontSize: 9.5, color: aktifKartu ? 'var(--kuning)' : 'var(--sub)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {t.nama.replace(/\s*\(video\)\s*/i, '')}
+              </span>
+            </button>
+          )
+        })}
       </div>
+
+      {!pilih && (
+        <p className="teks" style={{ textAlign: 'center', fontSize: 12.5, color: 'var(--sub)', margin: '2px 0 0' }}>
+          Ketuk satu desain, Story-nya jadi dalam hitungan detik.
+        </p>
+      )}
 
       {galat && (
         <p className="teks" style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: 'var(--kuning)', margin: '4px 0 10px' }}>
@@ -146,15 +201,20 @@ export default function StorySection({ kode, api, downloadOne }: {
             ) : (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--krem)' }}>
                 <Sparkles size={26} />
-                <span className="teks" style={{ fontSize: 14 }}>Merakit Story kamu…</span>
+                <span className="teks" style={{ fontSize: 14 }}>Lagi nempelin fotomu…</span>
                 <Loader2 size={18} className="muter" />
               </div>
             )}
           </div>
           {aktif && (
+            <p className="teks" style={{ textAlign: 'center', fontSize: 12.5, lineHeight: 1.45, color: 'var(--abu)', margin: 0 }}>
+              {aktif.jenis === 'video' ? 'Slideshow fotomu ikut berputar di dalamnya. ' : ''}Tekan Posting, lalu pilih Instagram → Story.
+            </p>
+          )}
+          {aktif && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <button className="tombol merah kecil" onClick={bagikan} disabled={!!aksi}>
-                {aksi === 'bagikan' ? <Loader2 size={14} className="muter" /> : <Share2 size={14} />}Bagikan
+                {aksi === 'bagikan' ? <Loader2 size={14} className="muter" /> : <Share2 size={14} />}Posting
               </button>
               <button className="tombol lunak kecil" onClick={simpan} disabled={!!aksi}>
                 {aksi === 'simpan' ? <Loader2 size={14} className="muter" /> : <Download size={14} />}Simpan

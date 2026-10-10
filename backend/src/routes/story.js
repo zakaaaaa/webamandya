@@ -15,9 +15,10 @@ const fs = require('fs/promises');
 const router = express.Router();
 const { supabase } = require('../middleware/validateDevice');
 const { putObject } = require('../utils/storage');
-const { rakitStory, frameStrip2, bersihkan } = require('../utils/story-render');
+const { rakitStory, rakitStripFoto, frameStrip2, bersihkan } = require('../utils/story-render');
 
 const MAKS_BERSAMAAN = 2;
+const MAKS_FOTO_STRIP = 5;
 let berjalan = 0;
 const antre = [];
 const sedangDirender = new Map(); // kunci cache -> Promise (cegah render dobel)
@@ -96,6 +97,8 @@ router.get('/templates', async (req, res) => {
         thumb: t.pratinjau_url || t.latar_url,
         stiker: t.pratinjau_url ? null : t.stiker_url,
         video: Boolean(sesi.gif_url) && (t.slots || []).some((s) => s.isi === 'animasi'),
+        // Posisi slot untuk penanda "foto kamu di sini" di thumbnail.
+        slots: (t.slots || []).map(({ isi, x, y, w, h, rot }) => ({ isi, x, y, w, h, rot: Number(rot) || 0 })),
       }));
     return res.json({ success: true, templates });
   } catch (e) {
@@ -130,8 +133,29 @@ async function renderBaru(sesi, template, versi) {
       animUrl ? unduh(animUrl, path.join(kerja, `animasi.${ekstensi(animUrl, 'mp4')}`)) : null,
     ]);
 
+    // Slot foto_strip: foto mentah sesi (urut photo_order, maks 5) ditumpuk
+    // vertikal seukuran slot terbesar. Tanpa foto, slot diisi hasil cetak.
+    let fotoStrip = null;
+    const slotFoto = slots.filter((s) => s.isi === 'foto_strip');
+    if (slotFoto.length) {
+      const { data: foto } = await supabase
+        .from('photos')
+        .select('photo_url, photo_order')
+        .eq('session_id', sesi.id)
+        .order('photo_order', { ascending: true })
+        .limit(MAKS_FOTO_STRIP);
+      const besar = slotFoto.reduce((a, s) => (s.w * s.h > a.w * a.h ? s : a));
+      // slot.jumlah (opsional) = berapa foto pertama yang ditumpuk.
+      const jumlah = Math.min(MAKS_FOTO_STRIP, Math.max(1, Math.round(Number(besar.jumlah) || MAKS_FOTO_STRIP)));
+      const urls = (foto || []).map((f) => f.photo_url).filter(Boolean).slice(0, jumlah);
+      if (urls.length) {
+        const file = await Promise.all(urls.map((u, i) => unduh(u, path.join(kerja, `foto${i}.${ekstensi(u, 'jpg')}`))));
+        fotoStrip = await rakitStripFoto(file, besar.w, besar.h, path.join(kerja, 'strip-foto.png'));
+      }
+    }
+
     const t0 = Date.now();
-    const keluar = await rakitStory({ slots, latar, stiker, hasil, animasi, kerja });
+    const keluar = await rakitStory({ slots, latar, stiker, hasil, fotoStrip, animasi, kerja });
     const ms = Date.now() - t0;
 
     const ext = keluar.jenis === 'video' ? 'mp4' : 'jpg';
