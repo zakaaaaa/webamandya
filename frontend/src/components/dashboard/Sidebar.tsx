@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import { LayoutDashboard, Receipt, Images, Frame, Ticket, Monitor, Users, LogOut, Settings, Menu, X, Sparkles } from 'lucide-react'
+import { LayoutDashboard, Receipt, Images, Frame, Ticket, Monitor, Users, LogOut, Settings, Menu, X, Sparkles, Stamp } from 'lucide-react'
 
 const adminNav = [
   { href: '/dashboard',    label: 'Overview',  icon: LayoutDashboard },
@@ -13,6 +13,7 @@ const adminNav = [
   { href: '/frames',       label: 'Frame',     icon: Frame },
   { href: '/story',        label: 'Template Story', icon: Sparkles },
   { href: '/vouchers',     label: 'Voucher',   icon: Ticket    },
+  { href: '/kartu-stamp',  label: 'Papan Kenangan', icon: Stamp },
   { href: '/devices',      label: 'Perangkat', icon: Monitor   },
   { href: '/settings',     label: 'Pengaturan', icon: Settings },
 ]

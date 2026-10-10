@@ -41,7 +41,7 @@ const HALAMAN_DASH = ['/talent', '/masuk']
  */
 const DASBOR = new Set([
   'dashboard', 'clients', 'devices', 'frames',
-  'gallery', 'settings', 'transactions', 'vouchers', 'login', 'story',
+  'gallery', 'settings', 'transactions', 'vouchers', 'login', 'story', 'kartu-stamp',
 ])
 
 export async function proxy(request: NextRequest) {
@@ -108,6 +108,12 @@ export async function proxy(request: NextRequest) {
   // Halaman promo yang dibuka dari QR tent card di meja d'Logok. Sama seperti
   // standee antrean: kartunya sudah tercetak, jadi path ini harus tetap publik.
   if (pathname === '/dlogok') {
+    return NextResponse.next()
+  }
+
+  // Kartu stamp promo "foto 5x, sesi ke-6 gratis": pelanggan tanpa akun,
+  // kartunya diingat lewat localStorage.
+  if (pathname === '/stamp') {
     return NextResponse.next()
   }
 
