@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Download, Check, Loader2, Film, Sparkles, AlertCircle, Printer, Bell, BellOff } from 'lucide-react'
 import { DOWNLOAD_CSS } from './download.css'
 import StorySection from './StorySection'
+import PapanSection from './PapanSection'
+import { KLIEN_STAMP } from '@/lib/stamp'
 
 // pending    = mesin belum mulai
 // processing = mesin sedang merender/mengunggah
@@ -13,7 +15,9 @@ type MediaStatus = 'pending' | 'processing' | 'ready' | 'failed' | null
 
 type Session = {
   id: string
+  client_id?: string | null
   transaction_code: string
+  transaction_type?: string | null
   payment_status: string
   created_at: string
   result_url: string | null
@@ -833,6 +837,9 @@ export default function DownloadPage({
               />
             </div>
           )}
+
+          {/* ── PAPAN KENANGAN ── info promo, hanya sesi foto klien PK. */}
+          {session.client_id === KLIEN_STAMP && session.transaction_type !== 'extra_print' && <PapanSection/>}
 
           {/* ── PHOTO STRIP ── */}
           <Section title="Photo strip" meta={media.result_url ? 'hasil final dengan frame' : 'pratinjau sementara'}>

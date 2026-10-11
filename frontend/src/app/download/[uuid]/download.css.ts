@@ -157,6 +157,18 @@ html,body{margin:0;padding:0;background:#A12A1B}
 .dw .media h3{font-size:13px;letter-spacing:.12em;text-transform:uppercase;text-align:center;margin-top:10px;color:var(--merah)}
 .dw .media .teks{font-size:11.5px;color:var(--abu);text-align:center;line-height:1.35;margin:3px 0 10px;flex:1}
 
+/* ── Papan Kenangan (promo 5 sesi) ──
+   Info saja; menempel strip tetap di /stamp. */
+.dw .papan-promo .sub-judul span{display:block}
+.dw .papan-promo .sub-judul span:first-child{white-space:nowrap;font-size:clamp(30px,9.4vw,42px)}
+.dw .papan-promo .sub-judul .kuning{color:var(--kuning);font-size:clamp(23px,6.6vw,28px);line-height:1.15;margin:6px auto 0;max-width:330px}
+.dw .papan-ket{margin:14px auto 0;max-width:350px;text-align:center;font-size:14.5px;line-height:1.55;color:var(--sub)}
+.dw .papan-contoh{width:86%;height:auto;margin:26px auto 0;border-radius:12px;transform:rotate(1.5deg);
+  box-shadow:0 0 0 6px var(--krem),var(--bayang-3)}
+.dw .papan-catatan{margin-top:12px;text-align:center;font-size:12.5px;line-height:1.45;color:var(--sub)}
+.dw a.tombol{text-decoration:none}
+.dw a:focus-visible{outline:3px solid var(--kuning);outline-offset:3px}
+
 /* ── Laporan & kaki ── */
 .dw .lapor{margin-top:46px;text-align:center}
 .dw .lapor-link{background:none;border:0;cursor:pointer;padding:8px 12px;color:var(--sub);font-size:14px;text-decoration:underline;text-underline-offset:4px}
