@@ -10,11 +10,11 @@ const jakarta = Plus_Jakarta_Sans({ weight: ['400', '500', '600', '700'], subset
 export const metadata: Metadata = {
   title: 'Sewa Photobooth Bandar Lampung | Pabrik Kenangan',
   description:
-    'Sewa photobooth untuk pernikahan, ulang tahun, dan acara kantor di Bandar Lampung. Cetak 4R langsung di lokasi, plus GIF animasi dan live photo lewat QR.',
+    'Sewa photobooth untuk pernikahan, ulang tahun, dan acara kantor di Bandar Lampung. Cetak 4R langsung di lokasi, plus video slideshow dan live photo lewat QR.',
   openGraph: {
     title: 'Sewa Photobooth Bandar Lampung | Pabrik Kenangan',
     description:
-      'Cetak 4R langsung di lokasi, plus GIF animasi dan live photo lewat QR. Operator, kertas, dan properti sudah termasuk.',
+      'Cetak 4R langsung di lokasi, plus video slideshow dan live photo lewat QR. Operator, kertas, dan properti sudah termasuk.',
     type: 'website',
     locale: 'id_ID',
   },

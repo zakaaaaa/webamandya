@@ -7,10 +7,9 @@
  * harga = kolom Harga Jual + 20%. Strip di hero dan contoh hasil adalah aset
  * asli di public/landing/ (dipotong dari sesi PK ASUS yang ada di /galeri).
  *
- * Section AI (ganti latar + gaya ilustrasi) sengaja hanya di landing page;
- * fiturnya belum ada di aplikasi booth. Contoh ganti latar memakai potongan
- * rembg asli yang digambar ulang di canvas; contoh gaya ilustrasi adalah
- * filter OpenCV dan diberi keterangan "contoh pratinjau".
+ * Section AI (ganti latar + gaya ilustrasi) dan GIF dihapus 11 Okt malam atas
+ * permintaan pemilik; contoh animasi sekarang MP4 slideshow sesi asli
+ * (public/landing/hasil-slideshow.mp4, 720x480, ±230 KB).
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -38,27 +37,18 @@ const PAKET: Paket[] = [
   { kategori: 'cetak', nm: '200 Lembar Cerita', skema: 'Kuota 200 foto', harga: 1980000 },
 ]
 
+/* Strip hero: 9 sesi PK ASUS pilihan pemilik (11 Okt 2026), diurutkan supaya warnanya berselang-seling. */
 const STRIP: [string, string][] = [
-  ['strip-9', 'Strip foto bertema Wanted'],
-  ['strip-3', 'Strip foto Cheers Love'],
-  ['strip-8', 'Strip foto Pecel Lele'],
-  ['strip-2', 'Strip foto Take It Easy'],
-  ['strip-13', 'Strip foto Attack on Titan'],
-  ['strip-15', 'Strip foto OMG biru'],
-  ['strip-5', 'Strip foto Generasi Bergizi'],
-  ['strip-10', 'Strip foto Count Fest'],
-  ['strip-14', 'Strip foto piknik kotak merah'],
+  ['strip-h1', 'Strip foto Take It Easy, tiga sahabat berhijab'],
+  ['strip-h2', 'Strip foto Generasi Sandwich, rombongan berseragam oranye'],
+  ['strip-h3', 'Strip foto Take a Break, tiga teman'],
+  ['strip-h4', 'Strip foto Jeans hitam putih, dua sahabat'],
+  ['strip-h5', 'Strip foto Juragan Wanna Be, rombongan teman'],
+  ['strip-h6', 'Strip foto tiket Count Fest, empat teman'],
+  ['strip-h7', 'Strip foto Cheers Love, tiga teman'],
+  ['strip-h8', 'Strip foto Duo OMG kuning, pasangan'],
+  ['strip-h9', 'Strip foto ulang tahun ke-26, dua sahabat'],
 ]
-
-const GAYA: [string, string, string][] = [
-  ['ai-b-asli', 'Foto asli', 'Foto asli'],
-  ['ai-b-kartun', 'Kartun', 'Foto yang sama dalam gaya kartun'],
-  ['ai-b-sketsa', 'Sketsa pensil', 'Foto yang sama dalam gaya sketsa pensil'],
-  ['ai-b-lukis', 'Lukisan', 'Foto yang sama dalam gaya lukisan'],
-]
-
-type Latar = 'sampul' | 'lampu' | 'studio'
-const LATAR: [Latar, string][] = [['sampul', 'Sampul majalah'], ['lampu', 'Lampu pesta'], ['studio', 'Studio']]
 
 const SPEK: [string, string][] = [
   ['Kamera', 'Canon DSLR 18 MP'],
@@ -86,53 +76,12 @@ const TANYA: [string, string][] = [
 
 const rupiah = (n: number) => 'Rp' + n.toLocaleString('id-ID')
 
-/* Acak deterministik untuk posisi lampu, supaya gambarnya sama tiap kali digambar ulang. */
-const acak = (n: number) => { const x = Math.sin(n * 91.7) * 43758.5453; return x - Math.floor(x) }
-
-function gambarLatar(ctx: CanvasRenderingContext2D, mode: Latar, cut: HTMLImageElement | null, fDisplay: string, fBody: string) {
-  const W = ctx.canvas.width, H = ctx.canvas.height
-  ctx.clearRect(0, 0, W, H)
-  if (mode === 'lampu') {
-    const g = ctx.createLinearGradient(0, 0, 0, H)
-    g.addColorStop(0, '#24152b'); g.addColorStop(1, '#4a1f27')
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H)
-    for (let i = 0; i < 48; i++) {
-      const x = acak(i) * W, y = acak(i + 9) * H * 0.78, r = 16 + acak(i + 4) * 58
-      const hu = [44, 30, 350, 16][i % 4]
-      const rg = ctx.createRadialGradient(x, y, 0, x, y, r)
-      rg.addColorStop(0, `hsla(${hu},95%,74%,.8)`); rg.addColorStop(0.7, `hsla(${hu},95%,64%,.22)`); rg.addColorStop(1, `hsla(${hu},95%,60%,0)`)
-      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill()
-    }
-  } else if (mode === 'studio') {
-    const g = ctx.createRadialGradient(W * 0.55, H * 0.32, 30, W * 0.5, H * 0.45, H * 0.85)
-    g.addColorStop(0, '#f1ece6'); g.addColorStop(0.55, '#cfc4b9'); g.addColorStop(1, '#857a70')
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H)
-  } else {
-    ctx.fillStyle = '#F7D9D4'; ctx.fillRect(0, 0, W, H)
-    ctx.fillStyle = '#D42B22'; ctx.textBaseline = 'top'
-    ctx.font = `240px ${fDisplay}`
-    ctx.fillText('Kenangan', 14, 10, W - 28)
-    ctx.fillStyle = '#1E1A19'; ctx.font = `700 24px ${fBody}`
-    ctx.fillText('Edisi Oktober 2026', 24, 262)
-  }
-  if (cut?.complete && cut.naturalWidth) ctx.drawImage(cut, 0, 0, W, H)
-  if (mode === 'sampul') {
-    ctx.fillStyle = '#fff'; ctx.font = `700 36px ${fBody}`
-    ctx.fillText('Malam paling', 28, H - 140)
-    ctx.fillText('ramai tahun ini', 28, H - 96)
-  }
-}
-
 export default function Landing() {
   const [pilih, setPilih] = useState(1)
   const [tgl, setTgl] = useState('')
   const [jenis, setJenis] = useState('pernikahan')
   const [kota, setKota] = useState('')
-  const [aiLatar, setAiLatar] = useState(false)
-  const [aiGaya, setAiGaya] = useState(false)
   const [err, setErr] = useState('')
-  const [latar, setLatar] = useState<Latar>('sampul')
-  const [pos, setPos] = useState(50)
 
   const rootRef = useRef<HTMLDivElement>(null)
   const tglRef = useRef<HTMLInputElement>(null)
@@ -141,9 +90,7 @@ export default function Landing() {
   const specCv = useRef<HTMLCanvasElement>(null)
   const specHint = useRef<HTMLSpanElement>(null)
   const liveRef = useRef<HTMLVideoElement>(null)
-  const bgCv = useRef<HTMLCanvasElement>(null)
-  const cutRef = useRef<HTMLImageElement | null>(null)
-  const [fontSiap, setFontSiap] = useState(0)
+  const slideRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     if (!specHost.current || !specCv.current) return
@@ -152,34 +99,16 @@ export default function Landing() {
 
   useEffect(() => {
     // muted lewat properti: React tidak merender atribut `muted`, dan iOS menolak autoplay tanpa itu.
-    const v = liveRef.current
-    if (!v) return
-    v.muted = true
+    const vids = [liveRef.current, slideRef.current].filter((v): v is HTMLVideoElement => !!v)
+    vids.forEach((v) => { v.muted = true })
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) v.play().catch(() => {}); else v.pause() })
-    io.observe(v)
+    const io = new IntersectionObserver((ents) => ents.forEach((e) => {
+      const v = e.target as HTMLVideoElement
+      if (e.isIntersecting) v.play().catch(() => {}); else v.pause()
+    }))
+    vids.forEach((v) => io.observe(v))
     return () => io.disconnect()
   }, [])
-
-  /* Potongan tamu dan font dimuat sekali; latar digambar ulang tiap ganti pilihan. */
-  useEffect(() => {
-    const im = new Image()
-    im.onload = () => setFontSiap(n => n + 1)
-    im.src = '/landing/ai-cutout.webp'
-    cutRef.current = im
-    document.fonts?.ready.then(() => setFontSiap(n => n + 1))
-  }, [])
-
-  useEffect(() => {
-    const cv = bgCv.current, root = rootRef.current
-    if (!cv || !root) return
-    const ctx = cv.getContext('2d')
-    if (!ctx) return
-    const cs = getComputedStyle(root)
-    const fDisplay = cs.getPropertyValue('--font-bagel').trim() || '"Arial Black", sans-serif'
-    const fBody = cs.getPropertyValue('--font-jakarta').trim() || 'sans-serif'
-    gambarLatar(ctx, latar, cutRef.current, fDisplay, fBody)
-  }, [latar, fontSiap])
 
   const terpilih = PAKET[pilih]
 
@@ -187,14 +116,12 @@ export default function Landing() {
     const tglTxt = tgl
       ? new Date(tgl + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
       : '(belum diisi)'
-    const ai = [aiLatar && 'Ganti latar', aiGaya && 'Gaya ilustrasi'].filter(Boolean)
     const pesan =
       'Halo Pabrik Kenangan, saya mau cek ketersediaan booth.\n\n' +
       `Tanggal acara: ${tglTxt}\n` +
       `Jenis acara: ${jenis}\n` +
       `Lokasi: ${kota.trim() || '(belum diisi)'}\n` +
-      `Paket: ${terpilih.nm}, ${terpilih.skema} (${rupiah(terpilih.harga)})` +
-      (ai.length ? `\nTambahan AI: ${ai.join(', ')}` : '')
+      `Paket: ${terpilih.nm}, ${terpilih.skema} (${rupiah(terpilih.harga)})`
     return `https://wa.me/${WA}?text=${encodeURIComponent(pesan)}`
   }
 
@@ -225,7 +152,6 @@ export default function Landing() {
           <a href="#atas" aria-label="Pabrik Kenangan, ke atas"><span className="logo" role="img" aria-label="Pabrik Kenangan" /></a>
           <nav aria-label="Utama">
             <a href="#hasil">Hasil</a>
-            <a href="#ai">Fitur AI</a>
             <a href="#harga">Harga</a>
             <a href="#unit">Unit</a>
             <a href="#tanya">Tanya jawab</a>
@@ -246,20 +172,23 @@ export default function Landing() {
               </div>
             </div>
           </div>
+          {/* Rak strip berjalan pelan: daftar digandakan supaya putarannya mulus. Salinan kedua disembunyikan dari pembaca layar. */}
           <div className="strips" aria-label="Strip foto asli dari booth kami">
-            {STRIP.map(([f, alt], i) => (
-              <a key={f} href="/galeri" style={{ '--i': i } as React.CSSProperties}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- aset statis berukuran tetap */}
-                <img src={`/landing/${f}.webp`} width={400} height={1198} alt={alt} fetchPriority={i < 5 ? 'high' : 'auto'} />
-              </a>
-            ))}
+            <div className="rail">
+              {[0, 1].map((salinan) => STRIP.map(([f, alt], i) => (
+                <a key={`${salinan}-${f}`} href="/galeri" aria-hidden={salinan ? true : undefined} tabIndex={salinan ? -1 : undefined}>
+                  {/* eslint-disable-next-line @next/next/no-img-element -- aset statis berukuran tetap */}
+                  <img src={`/landing/${f}.webp`} width={400} height={1198} alt={salinan ? '' : alt} fetchPriority={!salinan && i < 5 ? 'high' : 'auto'} />
+                </a>
+              )))}
+            </div>
           </div>
         </section>
 
         <section className="sec" id="hasil" style={{ paddingTop: 'clamp(24px,4vw,48px)' }}>
           <div className="wrap">
             <h2>Tamu pulang bawa tiga kenangan</h2>
-            <p className="lede">Cetakannya dipegang langsung di acara. GIF dan live photo diunduh lewat QR di layar booth.</p>
+            <p className="lede">Cetakannya dipegang langsung di acara. Video slideshow dan live photo diunduh lewat QR di layar booth.</p>
 
             <div className="takeaway">
               <div className="take take-print">
@@ -273,13 +202,14 @@ export default function Landing() {
                   <p>Kertas glossy 260 gsm berisi dua strip kembar dengan frame acaramu, tinggal dipotong jadi dua. Versi digitalnya juga bisa diunduh satuan.</p>
                 </div>
               </div>
-              <div className="take take-gif">
+              <div className="take take-slide">
                 <figure>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- GIF animasi, next/image akan membekukannya */}
-                  <img src="/landing/hasil-gif.gif" width={480} height={320} loading="lazy" decoding="async" alt="GIF animasi dari jepretan satu sesi" />
+                  <video ref={slideRef} src="/landing/hasil-slideshow.mp4" poster="/landing/hasil-slideshow.jpg"
+                         width={720} height={480} loop playsInline preload="metadata"
+                         aria-label="Video slideshow dari jepretan satu sesi" />
                 </figure>
-                <h3>GIF animasi</h3>
-                <p>Jepretan satu sesi disusun jadi animasi berulang. Ringan untuk dikirim ke grup atau dipasang di status.</p>
+                <h3>Video slideshow</h3>
+                <p>Jepretan satu sesi dirangkai jadi video pendek. Ringan untuk dikirim ke grup atau langsung dipasang di Story.</p>
               </div>
               <div className="take take-live">
                 <figure>
@@ -292,46 +222,6 @@ export default function Landing() {
               </div>
             </div>
             <p className="gal-link"><a className="btn btn-text" href="/galeri">Lihat semua hasil di galeri</a></p>
-          </div>
-        </section>
-
-        <section className="sec tight" id="ai">
-          <div className="wrap">
-            <div className="ai-top">
-              <div className="compare" style={{ '--pos': pos + '%' } as React.CSSProperties}>
-                {/* eslint-disable-next-line @next/next/no-img-element -- harus bertumpuk tepat dengan canvas */}
-                <img src="/landing/ai-asli.webp" width={820} height={1025} loading="lazy" alt="Foto asli tamu di depan tirai merah gedung" />
-                <canvas ref={bgCv} className="after" width={820} height={1025} role="img" aria-label="Foto yang sama dengan latar yang diganti AI" />
-                <span className="bar" />
-                <input type="range" min={0} max={100} value={pos} onChange={e => setPos(+e.target.value)}
-                       aria-label="Geser untuk membandingkan foto asli dan hasil ganti latar" />
-                <span className="knob" aria-hidden="true">&harr;</span>
-              </div>
-              <div className="ai-copy">
-                <h2>Latar gedung kurang cantik? Biar AI yang ganti.</h2>
-                <p className="body">AI memisahkan tamu dari latar di belakangnya, lalu menaruhnya di latar bertema acaramu. Tanpa green screen, tanpa tamu harus pindah tempat. Geser foto di samping untuk membandingkan.</p>
-                <div className="bgs" role="group" aria-label="Coba latar lain">
-                  {LATAR.map(([k, label]) => (
-                    <button key={k} type="button" aria-pressed={latar === k} onClick={() => setLatar(k)}>{label}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="styles">
-              <h2>Mau versi ilustrasinya juga bisa.</h2>
-              <p className="lede">Satu jepretan dibuat ulang jadi gambar bergaya, dikirim sebagai bonus lewat QR. Tamu memilih gayanya sendiri di layar booth.</p>
-              <div className="style-row">
-                {GAYA.map(([f, cap, alt]) => (
-                  <figure key={f}>
-                    {/* eslint-disable-next-line @next/next/no-img-element -- aset statis berukuran tetap */}
-                    <img src={`/landing/${f}.webp`} width={730} height={520} loading="lazy" decoding="async" alt={alt} />
-                    <figcaption>{cap}</figcaption>
-                  </figure>
-                ))}
-              </div>
-              <p className="note">Gambar gaya di atas adalah contoh pratinjau. Kedua fitur AI bisa ditambahkan ke paket mana pun.</p>
-            </div>
           </div>
         </section>
 
@@ -379,10 +269,6 @@ export default function Landing() {
                 <input type="text" id="kota" ref={kotaRef} placeholder="nama kota" required value={kota}
                        onChange={e => { setKota(e.target.value); setErr('') }} />.
               </p>
-              <div className="addons" role="group" aria-label="Tambahan AI">
-                <label><input type="checkbox" checked={aiLatar} onChange={e => setAiLatar(e.target.checked)} /> Tambah AI ganti latar</label>
-                <label><input type="checkbox" checked={aiGaya} onChange={e => setAiGaya(e.target.checked)} /> Tambah AI gaya ilustrasi</label>
-              </div>
               <p className="err" role="alert">{err}</p>
               <div className="send">
                 <a className="btn btn-red" href={pesanWA()} target="_blank" rel="noopener" onClick={cekKirim}>Kirim lewat WhatsApp</a>
