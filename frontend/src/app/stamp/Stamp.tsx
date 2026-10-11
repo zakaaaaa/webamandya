@@ -41,7 +41,7 @@ async function panggil(body: Record<string, unknown>) {
     body: JSON.stringify(body),
   })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw Object.assign(new Error(data.error ?? 'Terjadi kesalahan, coba lagi.'), { status: res.status })
+  if (!res.ok) throw Object.assign(new Error(data.error ?? 'Ada yang nggak beres, coba lagi ya.'), { status: res.status })
   return data
 }
 
@@ -176,8 +176,8 @@ export default function Stamp() {
       setPesan({
         jenis: 'ok',
         teks: k.stamps.length >= JUMLAH_STAMP
-          ? 'Papanmu penuh! Saatnya pamer 🎉'
-          : `Kenangan ke-${k.stamps.length} nempel! Tinggal ${JUMLAH_STAMP - k.stamps.length} lagi menuju sesi gratis.`,
+          ? 'Nempel! Papanmu penuh. Sekarang tinggal dipamerin.'
+          : `Nempel! Tinggal ${JUMLAH_STAMP - k.stamps.length} lagi.`,
       })
     } catch (err) {
       setPesan({ jenis: 'gagal', teks: (err as Error).message })
@@ -225,7 +225,7 @@ export default function Stamp() {
   }
 
   function kartuBaru() {
-    if (!confirm('Mulai papan baru? Papan yang sekarang tidak bisa dibuka lagi dari HP ini.')) return
+    if (!confirm('Mulai papan baru? Papan yang sekarang nggak bisa dibuka lagi dari HP ini.')) return
     tulisSimpanan(null); setSimpanan(null); setKartu(null); setPesan(null); setIg('')
   }
 
@@ -234,54 +234,60 @@ export default function Stamp() {
     try { await navigator.clipboard.writeText(kartu.voucher_kode); setTersalin(true); setTimeout(() => setTersalin(false), 1500) } catch {}
   }
 
+  const sisa = JUMLAH_STAMP - jumlah
+
   return (
     <main className="st">
       <style>{STAMP_CSS}</style>
 
       <header className="kepala">
-        <img src="/logo-pk.webp" alt="Pabrik Kenangan" className="logo" />
-        <p className="lab kecil">PAPAN KENANGAN</p>
-        <h1 className="disp">Foto 5x,<br />yang ke-6<br />kami traktir!</h1>
-        <p className="sub">Tiap sesi foto jadi satu kenangan yang nempel di papanmu. Penuhi 5 slot, pamerin di IG, sesi berikutnya gratis.</p>
+        <div className="logo-duo">
+          <img src="/dlogok/logo-pk.webp" alt="Pabrik Kenangan" className="logo-pk" />
+          <span className="kali">×</span>
+          <img src="/dlogok/logo-dlogok-putih.webp" alt="d'Logok" className="logo-dl" />
+        </div>
+        <h1 className="disp">Papan Kenangan</h1>
+        <p className="lab tagar">Foto 5x · yang ke-6 gratis</p>
+        {!kartu && siap && (
+          <p className="sub">Tiap habis foto, tempel link hasilnya di sini. Lima strip nempel, sesi berikutnya kami yang bayar.</p>
+        )}
       </header>
-
-      <section className="hitung" aria-label={`${jumlah} dari ${JUMLAH_STAMP} kenangan`}>
-        {Array.from({ length: JUMLAH_STAMP }, (_, i) => (
-          <span key={i} className={i < jumlah ? 'isi' : ''}>{i < jumlah ? '★' : i + 1}</span>
-        ))}
-        <span className="hadiah">GRATIS</span>
-      </section>
 
       <section className="bingkai">
         {siap ? <Papan kartu={kartu} baru={baru} /> : <div className="papan memuat" style={{ aspectRatio: `${PAPAN_W} / ${PAPAN_H}` }} />}
+        {kartu && !kartu.voucher_kode && (
+          <p className="lab progres" role="status">
+            {penuh ? `${JUMLAH_STAMP} dari ${JUMLAH_STAMP} · papanmu penuh` : `${jumlah} dari ${JUMLAH_STAMP} nempel · tinggal ${sisa} lagi`}
+          </p>
+        )}
       </section>
 
       {pesan && <p className={`pesan ${pesan.jenis}`} role="status">{pesan.teks}</p>}
 
       {siap && !penuh && (
         <section className="kartu-form">
-          <h2 className="lab">{jumlah ? `PIN KENANGAN KE-${jumlah + 1}` : 'PIN KENANGAN PERTAMAMU'}</h2>
+          <h2>{jumlah ? `Strip ke-${jumlah + 1}, tempel di sini.` : 'Udah foto? Tempel link-nya.'}</h2>
           <form onSubmit={tempel}>
             <div className="baris">
               <input
                 ref={formRef}
                 value={tautan}
                 onChange={(e) => setTautan(e.target.value)}
-                placeholder="pabrikenangan.my.id/download/…"
+                placeholder="Link hasil foto (…/download/…)"
                 inputMode="url"
                 autoComplete="off"
                 aria-label="Link hasil foto"
               />
               <button type="button" className="kecil-btn" onClick={tempelDariClipboard}>Paste</button>
             </div>
-            <button className="tombol" disabled={sibuk || !tautan.trim()}>{sibuk ? 'Lagi dipin…' : 'Pin ke papan'}</button>
+            <button className="tombol" disabled={sibuk || !tautan.trim()}>{sibuk ? 'Lagi nempel…' : 'Tempel ke papan'}</button>
           </form>
           <details className="bantuan">
             <summary>Link-nya dari mana?</summary>
             <ol>
-              <li>Habis foto, scan QR yang muncul di layar booth.</li>
-              <li>Halaman hasil fotomu terbuka. Salin alamatnya (tombol bagikan di browser → Salin).</li>
-              <li>Tempel di sini. Satu sesi = satu kenangan, dan tiap link cuma bisa dipin di satu papan. Jadi kalau foto rame-rame, siapa cepat dia dapat 😉</li>
+              <li>Habis foto, scan QR di layar booth. Hasil fotomu kebuka di browser.</li>
+              <li>Salin alamat halamannya (ketuk bar alamat, pilih Salin).</li>
+              <li>Tempel di sini. Satu sesi = satu strip, dan tiap link cuma bisa nempel di satu papan. Kalau foto bareng, satu orang aja yang nempel ya.</li>
             </ol>
           </details>
         </section>
@@ -289,40 +295,45 @@ export default function Stamp() {
 
       {penuh && !kartu?.voucher_kode && (
         <section className="kartu-form">
-          <h2 className="lab">PAMERIN PAPANMU, AMBIL SESI GRATISNYA</h2>
-          <ol className="langkah">
-            <li>
-              <b>Simpan papanmu</b>, ukurannya sudah pas untuk Story.
-              <button className="tombol" onClick={simpanGambar} disabled={!berkas}>{berkas ? 'Simpan gambar' : 'Lagi disiapin…'}</button>
-            </li>
-            <li><b>Posting di Story atau feed IG</b>, lalu tag <b>@pabrikenangan</b>.</li>
-            <li>
-              <b>Kasih tahu username IG-mu.</b> Begitu postinganmu kami lihat, voucher sesi gratis langsung kami kirim lewat DM.
+          <h2>Papanmu penuh. Tinggal dipamerin.</h2>
+          <p className="teks">Simpan gambarnya, posting ke Story atau feed, lalu tag <b>@pabrikenangan</b>.</p>
+          <button className="tombol" onClick={simpanGambar} disabled={!berkas}>{berkas ? 'Simpan gambar papan' : 'Lagi disiapin…'}</button>
+          <div className="sekat" />
+          {kartu?.diajukan_at ? (
+            <>
+              <h3>Oke, kami cek dulu.</h3>
+              <p className="teks">Postingan <b>@{kartu.ig_username}</b> lagi kami lihat. Vouchernya kami kirim lewat DM Instagram ke akun itu, jadi pastikan DM-nya terbuka ya.</p>
               <form onSubmit={ajukan} className="baris">
-                <input value={ig || kartu?.ig_username || ''} onChange={(e) => setIg(e.target.value)} placeholder="@username" autoComplete="off" aria-label="Username Instagram" />
-                <button className="kecil-btn" disabled={sibuk || !(ig || kartu?.ig_username)}>{kartu?.diajukan_at ? 'Ubah' : 'Kirim'}</button>
+                <input value={ig || kartu.ig_username || ''} onChange={(e) => setIg(e.target.value)} placeholder="@username" autoComplete="off" aria-label="Username Instagram" />
+                <button className="kecil-btn" disabled={sibuk || !(ig || kartu.ig_username)}>Ubah</button>
               </form>
-            </li>
-          </ol>
-          {kartu?.diajukan_at && (
-            <p className="tunggu">⏳ Postingan <b>@{kartu.ig_username}</b> lagi kami cek. Vouchernya nanti juga muncul di halaman ini.</p>
+            </>
+          ) : (
+            <>
+              <h3>Udah diposting?</h3>
+              <p className="teks">Tulis username IG-mu. Begitu postingannya kami lihat, voucher sesi gratis kami kirim lewat DM.</p>
+              <form onSubmit={ajukan} className="baris">
+                <input value={ig} onChange={(e) => setIg(e.target.value)} placeholder="@username" autoComplete="off" aria-label="Username Instagram" />
+                <button className="kecil-btn" disabled={sibuk || !ig}>Kirim</button>
+              </form>
+            </>
           )}
         </section>
       )}
 
       {kartu?.voucher_kode && (
         <section className="kartu-form voucher">
-          <h2 className="lab">SESI GRATISMU SUDAH SIAP 🎉</h2>
+          <h2 className="disp">Sesi gratismu.</h2>
           <button className="kode-voucher" onClick={salinVoucher}>{kartu.voucher_kode}</button>
-          <p>{tersalin ? 'Kode tersalin!' : 'Masukkan kode ini di booth waktu pilih pembayaran. Berlaku untuk satu sesi.'}</p>
-          <button className="tombol garis" onClick={kartuBaru}>Mulai papan baru</button>
+          <p className="teks">{tersalin ? 'Kode tersalin.' : 'Kode yang sama udah kami DM ke IG-mu. Tunjukin pas bayar di booth, berlaku untuk satu sesi.'}</p>
+          <button className="tautan" onClick={kartuBaru}>Mulai papan baru</button>
         </section>
       )}
 
       {kartu && (
         <footer className="kaki">
-          <p>Papanmu tersimpan di browser HP ini. Buka lagi dari browser yang sama, dan jangan hapus data browser-nya ya.</p>
-          {tanpaSimpan && <p className="peringatan">Browser ini tidak bisa menyimpan papan (mode privat?). Simpan gambar papanmu sebelum menutup halaman.</p>}
+          <p>Papan ini nempel di HP yang kamu pakai sekarang. Lain kali buka dari HP yang sama ya.</p>
+          {tanpaSimpan && <p className="peringatan">Browser ini lagi nggak bisa nyimpen papan (mode privat?). Simpan gambar papanmu dulu sebelum halaman ditutup.</p>}
         </footer>
       )}
     </main>

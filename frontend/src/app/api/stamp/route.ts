@@ -95,12 +95,12 @@ export async function POST(request: Request) {
 
   if (body.aksi === 'klaim') {
     const kode = kodeDariTautan(String(body.tautan ?? ''))
-    if (!kode) return gagal('Itu bukan link hasil foto. Tempel link dari halaman download (…/download/…).')
+    if (!kode) return gagal('Itu bukan link hasil foto. Yang ditempel link dari halaman download ya, yang ada /download/-nya.')
 
     const { count } = await supabase
       .from('stamp_claims').select('id', { count: 'exact', head: true }).eq('card_id', kartu.id)
     const sudah = count ?? 0
-    if (sudah >= JUMLAH_STAMP) return gagal('Papanmu sudah penuh. Saatnya pamer!')
+    if (sudah >= JUMLAH_STAMP) return gagal('Papanmu udah penuh. Sekarang tinggal dipamerin.')
 
     const { data: sesi } = await supabase
       .from('sessions')
@@ -108,11 +108,11 @@ export async function POST(request: Request) {
       .eq('transaction_code', kode)
       .maybeSingle()
 
-    if (!sesi || sesi.client_id !== KLIEN_STAMP) return gagal('Sesi foto tidak ditemukan. Cek lagi link-nya ya.')
-    if (sesi.transaction_type === 'extra_print') return gagal('Tambah cetakan tidak bisa dipin. Pakai link dari sesi fotonya ya.')
-    if (sesi.payment_status === 'free') return gagal('Sesi gratis atau pakai voucher tidak bisa dipin ke papan.')
-    if (sesi.payment_status !== 'paid') return gagal('Sesi ini belum lunas, jadi belum bisa dipin.')
-    if (!sesi.result_url) return gagal('Hasil foto sesi ini belum siap. Coba lagi beberapa menit lagi.')
+    if (!sesi || sesi.client_id !== KLIEN_STAMP) return gagal('Sesi fotonya nggak ketemu. Cek lagi link-nya ya.')
+    if (sesi.transaction_type === 'extra_print') return gagal('Yang bisa ditempel sesi fotonya, bukan tambah cetakan. Pakai link dari sesi fotonya ya.')
+    if (sesi.payment_status === 'free') return gagal('Sesi gratis atau pakai voucher nggak bisa ditempel ke papan.')
+    if (sesi.payment_status !== 'paid') return gagal('Sesi ini belum lunas, jadi belum bisa ditempel.')
+    if (!sesi.result_url) return gagal('Hasil fotonya belum siap. Coba lagi beberapa menit lagi ya.')
 
     const { error } = await supabase
       .from('stamp_claims')
@@ -121,19 +121,19 @@ export async function POST(request: Request) {
     if (error?.code === '23505') {
       const { data: pemilik } = await supabase
         .from('stamp_claims').select('card_id').eq('session_id', sesi.id).maybeSingle()
-      if (pemilik?.card_id === kartu.id) return gagal('Kenangan ini sudah ada di papanmu.')
-      if (pemilik) return gagal('Kenangan ini sudah dipin di papan orang lain. Tiap sesi cuma bisa dipin sekali.')
+      if (pemilik?.card_id === kartu.id) return gagal('Strip ini udah ada di papanmu.')
+      if (pemilik) return gagal('Strip ini udah nempel di papan orang lain. Satu sesi cuma bisa ditempel sekali.')
       return gagal('Coba tempel sekali lagi.', 409)
     }
-    if (error) return gagal('Gagal menempel, coba lagi.', 500)
+    if (error) return gagal('Gagal nempel, coba lagi.', 500)
 
     return NextResponse.json({ kartu: await isiKartu(supabase, kartu) })
   }
 
   if (body.aksi === 'ajukan') {
-    if (kartu.hadiah_at) return gagal('Sesi gratis untuk papan ini sudah dikirim.')
+    if (kartu.hadiah_at) return gagal('Voucher untuk papan ini udah dikirim.')
     const ig = bersihkanIg(String(body.ig ?? ''))
-    if (!ig) return gagal('Username Instagram tidak sah.')
+    if (!ig) return gagal('Username Instagram-nya nggak valid.')
 
     const { count } = await supabase
       .from('stamp_claims').select('id', { count: 'exact', head: true }).eq('card_id', kartu.id)
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
       .eq('id', kartu.id)
       .select('id, kode, token_hash, ig_username, diajukan_at, voucher_kode, hadiah_at, created_at')
       .single<Kartu>()
-    if (error || !data) return gagal('Gagal mengirim, coba lagi.', 500)
+    if (error || !data) return gagal('Gagal ngirim, coba lagi.', 500)
     return NextResponse.json({ kartu: await isiKartu(supabase, data) })
   }
 

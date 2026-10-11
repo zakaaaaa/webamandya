@@ -11,10 +11,10 @@ import Stamp from './Stamp'
  */
 export const metadata: Metadata = {
   title: 'Papan Kenangan | Pabrik Kenangan',
-  description: 'Foto 5x di Pabrik Kenangan, yang ke-6 kami traktir. Pin tiap hasil fotomu ke Papan Kenangan dan ambil sesi gratisnya.',
+  description: 'Foto 5x di Pabrik Kenangan, yang ke-6 gratis. Tempel link hasil fotomu ke Papan Kenangan, penuh 5 strip, sesi berikutnya kami yang bayar.',
   openGraph: {
     title: 'Papan Kenangan · Pabrik Kenangan',
-    description: 'Foto 5x, yang ke-6 kami traktir!',
+    description: 'Foto 5x, yang ke-6 gratis.',
     type: 'website',
     locale: 'id_ID',
   },
